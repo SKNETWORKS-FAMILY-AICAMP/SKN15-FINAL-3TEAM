@@ -6,10 +6,7 @@ app = FastAPI()
 
 def get_connection(db_name):
     return mysql.connector.connect(
-        host='127.0.0.1',
-        user='play',
-        password='123',
-        database=db_name
+"enter your detail"
     )
 
 def query_chatbot_logic(text: str) -> str:
