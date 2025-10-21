@@ -2,7 +2,39 @@
 
 ## 1. 팀 소개
 
-(팀 소개 내용을 요구사항과 기획서에서 간략히 요약 기재)
+<table>
+  <tr>
+    <td align="center" width="150">
+      <a href="https://github.com/wngud09">
+        <img src="https://github.com/wngud09.png" width="80" style="border-radius:50%;" alt="김주형 아바타"/><br/>
+        <strong>김주형</strong><br/><sub>[팀장]</sub><br/><code>@wngud09</code><br/>
+      </a>
+    </td>
+    <td align="center" width="150">
+        <a href="https://github.com/asdg441">
+        <img src="https://github.com/asdg441.png" width="80" style="border-radius:50%;" alt="노건우 아바타"/><br/>
+        <strong>노건우</strong><br/><code>@asdg441</code><br/>
+      </a>
+    </td>
+    <td align="center" width="150">
+        <a href="https://github.com/isjini">
+        <img src="https://github.com/isjini.png" width="80" style="border-radius:50%;" alt="이세진 아바타"/><br/>
+        <strong>이세진</strong><br/><code>@isjini</code><br/>
+      </a>
+    </td>
+    <td align="center" width="150">
+      <a href="https://github.com/leesojunghub">
+        <img src="https://github.com/leesojunghub.png" width="80" style="border-radius:50%;" alt="이소정 아바타"/><br/>
+        <strong>이소정</strong><br/><code>@leesojunghub</code><br/>
+      </a>
+    </td>
+    <td align="center" width="150">
+      <a href="https://github.com/solchna">
+        <img src="https://github.com/solchna.png" width="80" style="border-radius:50%;" alt="조솔찬 아바타"/><br/>
+        <strong>조솔찬</strong><br/><code>@solchna</code><br/>
+      </a>
+  </tr>
+</table>
 
 ## 2. 프로젝트 기간
 
