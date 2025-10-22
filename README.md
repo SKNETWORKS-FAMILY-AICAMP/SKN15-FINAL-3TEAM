@@ -87,8 +87,6 @@
 
 ## ⚙️ 4. 기술 스택  
 
-## ⚙️ 4. 기술 스택
-
 | 분야 | 기술 |
 |------|------|
 | 💻 **언어** | ![Python](https://img.shields.io/badge/Python-3.10-blue?logo=python&logoColor=white) |
