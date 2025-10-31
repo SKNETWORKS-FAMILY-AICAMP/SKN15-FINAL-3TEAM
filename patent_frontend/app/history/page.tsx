@@ -1,68 +1,80 @@
 "use client"
+import { API_BASE_URL } from "@/lib/config"
 
 import { MainLayout } from "@/components/main-layout"
-import { Search, Users, Trash2, User } from "lucide-react"
+import { Search, Users, Trash2 } from "lucide-react"
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
-interface SearchHistory {
-  history_id: string
-  query: string
-  search_type: string
-  search_type_display: string
-  results_count: number
-  created_by_name: string
+interface ChatConversation {
+  id: string
+  title: string
+  user_name: string
+  user_id: string
   created_at: string
-  company_name: string
-  department_name: string
-  is_shared: boolean
+  updated_at: string
+  message_count: number
+  last_message: {
+    content: string
+    type: string
+    created_at: string
+  } | null
 }
 
 export default function HistoryPage() {
-  const [sharedHistory, setSharedHistory] = useState<SearchHistory[]>([])
-  const [myHistory, setMyHistory] = useState<SearchHistory[]>([])
+  const router = useRouter()
+  const [sharedConversations, setSharedConversations] = useState<ChatConversation[]>([])
+  const [myConversations, setMyConversations] = useState<ChatConversation[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
+  const [currentUser, setCurrentUser] = useState<any>(null)
 
   useEffect(() => {
+    const user = JSON.parse(localStorage.getItem("user") || "{}")
+    setCurrentUser(user)
     loadHistory()
   }, [])
+
+  const handleConversationClick = (conversationId: string) => {
+    // conversation_id를 URL 파라미터로 전달하여 검색 페이지로 이동
+    router.push(`/search?conversation_id=${conversationId}&tab=chat`)
+  }
 
   const loadHistory = async () => {
     setLoading(true)
     const token = localStorage.getItem("access_token")
 
     try {
-      // 공유 히스토리 (부서 전체)
-      const sharedRes = await fetch(`${API_BASE_URL}/api/accounts/history/?shared=true`, {
+      // 부서 공유 챗봇 대화 (같은 부서의 모든 사용자 대화)
+      const sharedRes = await fetch(`${API_BASE_URL}/api/chatbot/conversations/?my=false`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (sharedRes.ok) {
         const data = await sharedRes.json()
-        setSharedHistory(data)
+        setSharedConversations(data)
       }
 
-      // 내 히스토리만
-      const myRes = await fetch(`${API_BASE_URL}/api/accounts/history/?my=true`, {
+      // 내 챗봇 대화
+      const myRes = await fetch(`${API_BASE_URL}/api/chatbot/conversations/?my=true`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (myRes.ok) {
         const data = await myRes.json()
-        setMyHistory(data)
+        setMyConversations(data)
       }
     } catch (err) {
-      setError("히스토리를 불러오는데 실패했습니다.")
+      setError("대화 기록을 불러오는데 실패했습니다.")
     } finally {
       setLoading(false)
     }
   }
 
-  const handleDelete = async (historyId: string) => {
+  const handleDeleteConversation = async (conversationId: string) => {
     if (!confirm("정말 삭제하시겠습니까?")) return
 
     const token = localStorage.getItem("access_token")
@@ -70,13 +82,13 @@ export default function HistoryPage() {
     setSuccess("")
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/accounts/history/${historyId}/`, {
+      const response = await fetch(`${API_BASE_URL}/api/chatbot/conversations/${conversationId}/`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       })
 
       if (response.ok) {
-        setSuccess("히스토리가 삭제되었습니다.")
+        setSuccess("대화가 삭제되었습니다.")
         loadHistory()
       } else {
         const data = await response.json()
@@ -107,8 +119,8 @@ export default function HistoryPage() {
           {/* Header */}
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">검색 히스토리</h1>
-              <p className="text-gray-600 mt-1">부서원들의 검색 기록을 공유합니다</p>
+              <h1 className="text-3xl font-bold text-gray-900">챗봇 대화 기록</h1>
+              <p className="text-gray-600 mt-1">부서 공유 및 개인 챗봇 대화를 확인합니다</p>
             </div>
             <Button onClick={loadHistory} variant="outline">
               새로고침
@@ -132,8 +144,8 @@ export default function HistoryPage() {
             <div className="bg-white p-6 rounded-lg shadow">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">부서 공유 히스토리</p>
-                  <p className="text-2xl font-bold">{sharedHistory.length}개</p>
+                  <p className="text-sm text-gray-600">부서 공유 대화</p>
+                  <p className="text-2xl font-bold">{sharedConversations.length}개</p>
                 </div>
                 <Users className="h-8 w-8 text-blue-600" />
               </div>
@@ -141,21 +153,24 @@ export default function HistoryPage() {
             <div className="bg-white p-6 rounded-lg shadow">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">내 히스토리</p>
-                  <p className="text-2xl font-bold">{myHistory.length}개</p>
+                  <p className="text-sm text-gray-600">내 대화</p>
+                  <p className="text-2xl font-bold">{myConversations.length}개</p>
                 </div>
-                <User className="h-8 w-8 text-green-600" />
+                <Search className="h-8 w-8 text-green-600" />
               </div>
             </div>
             <div className="bg-white p-6 rounded-lg shadow">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">총 검색 결과</p>
+                  <p className="text-sm text-gray-600">총 채팅 수</p>
                   <p className="text-2xl font-bold">
-                    {sharedHistory.reduce((sum, h) => sum + h.results_count, 0)}개
+                    {sharedConversations.length + myConversations.length}개
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    부서 {sharedConversations.length}개 · 개인 {myConversations.length}개
                   </p>
                 </div>
-                <Search className="h-8 w-8 text-purple-600" />
+                <Search className="h-8 w-8 text-orange-600" />
               </div>
             </div>
           </div>
@@ -163,30 +178,27 @@ export default function HistoryPage() {
           {/* Tabs */}
           <Tabs defaultValue="shared" className="space-y-4">
             <TabsList>
-              <TabsTrigger value="shared">부서 공유</TabsTrigger>
-              <TabsTrigger value="my">내 히스토리</TabsTrigger>
+              <TabsTrigger value="shared">부서 공유 대화</TabsTrigger>
+              <TabsTrigger value="my">내 대화 기록</TabsTrigger>
             </TabsList>
 
             {/* 부서 공유 탭 */}
             <TabsContent value="shared">
               <div className="bg-white rounded-lg shadow">
-                {sharedHistory.length === 0 ? (
-                  <p className="text-center text-gray-500 py-12">공유된 히스토리가 없습니다.</p>
+                {sharedConversations.length === 0 ? (
+                  <p className="text-center text-gray-500 py-12">공유된 대화가 없습니다.</p>
                 ) : (
                   <table className="w-full">
                     <thead className="bg-gray-50 border-b">
                       <tr>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          검색어
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          유형
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          결과 수
+                          대화 제목
                         </th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                           작성자
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          마지막 메시지
                         </th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                           날짜
@@ -194,22 +206,21 @@ export default function HistoryPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y">
-                      {sharedHistory.map((history) => (
-                        <tr key={history.history_id} className="hover:bg-gray-50">
-                          <td className="px-4 py-4 text-sm font-medium">{history.query}</td>
-                          <td className="px-4 py-4 text-sm">
-                            <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">
-                              {history.search_type_display}
-                            </span>
+                      {sharedConversations.map((conv) => (
+                        <tr
+                          key={conv.id}
+                          className="hover:bg-gray-50 cursor-pointer"
+                          onClick={() => handleConversationClick(conv.id)}
+                        >
+                          <td className="px-4 py-4 text-sm font-medium">{conv.title}</td>
+                          <td className="px-4 py-4 text-sm text-gray-600">
+                            {conv.user_name}
+                          </td>
+                          <td className="px-4 py-4 text-sm text-gray-600 max-w-xs truncate">
+                            {conv.last_message ? conv.last_message.content : '-'}
                           </td>
                           <td className="px-4 py-4 text-sm text-gray-600">
-                            {history.results_count}개
-                          </td>
-                          <td className="px-4 py-4 text-sm text-gray-600">
-                            {history.created_by_name}
-                          </td>
-                          <td className="px-4 py-4 text-sm text-gray-600">
-                            {new Date(history.created_at).toLocaleString("ko-KR")}
+                            {new Date(conv.updated_at).toLocaleString("ko-KR")}
                           </td>
                         </tr>
                       ))}
@@ -219,26 +230,20 @@ export default function HistoryPage() {
               </div>
             </TabsContent>
 
-            {/* 내 히스토리 탭 */}
+            {/* 내 대화 기록 탭 */}
             <TabsContent value="my">
               <div className="bg-white rounded-lg shadow">
-                {myHistory.length === 0 ? (
-                  <p className="text-center text-gray-500 py-12">내 히스토리가 없습니다.</p>
+                {myConversations.length === 0 ? (
+                  <p className="text-center text-gray-500 py-12">내 대화 기록이 없습니다.</p>
                 ) : (
                   <table className="w-full">
                     <thead className="bg-gray-50 border-b">
                       <tr>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          검색어
+                          대화 제목
                         </th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          유형
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          결과 수
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          공유 여부
+                          마지막 메시지
                         </th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                           날짜
@@ -249,36 +254,27 @@ export default function HistoryPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y">
-                      {myHistory.map((history) => (
-                        <tr key={history.history_id} className="hover:bg-gray-50">
-                          <td className="px-4 py-4 text-sm font-medium">{history.query}</td>
-                          <td className="px-4 py-4 text-sm">
-                            <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">
-                              {history.search_type_display}
-                            </span>
+                      {myConversations.map((conv) => (
+                        <tr
+                          key={conv.id}
+                          className="hover:bg-gray-50 cursor-pointer"
+                          onClick={() => handleConversationClick(conv.id)}
+                        >
+                          <td className="px-4 py-4 text-sm font-medium">{conv.title}</td>
+                          <td className="px-4 py-4 text-sm text-gray-600 max-w-xs truncate">
+                            {conv.last_message ? conv.last_message.content : '-'}
                           </td>
                           <td className="px-4 py-4 text-sm text-gray-600">
-                            {history.results_count}개
-                          </td>
-                          <td className="px-4 py-4 text-sm">
-                            {history.is_shared ? (
-                              <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">
-                                공유됨
-                              </span>
-                            ) : (
-                              <span className="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800">
-                                비공개
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-4 text-sm text-gray-600">
-                            {new Date(history.created_at).toLocaleString("ko-KR")}
+                            {new Date(conv.updated_at).toLocaleString("ko-KR")}
                           </td>
                           <td className="px-4 py-4 text-sm">
                             <Button
                               size="sm"
                               variant="ghost"
-                              onClick={() => handleDelete(history.history_id)}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleDeleteConversation(conv.id)
+                              }}
                               className="text-red-600 hover:text-red-700 hover:bg-red-50"
                             >
                               <Trash2 className="h-4 w-4" />

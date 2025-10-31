@@ -1,0 +1,14 @@
+{
+  "username": "admin",
+  "email": "admin@example.com",
+  "password": "your_secure_password_here",
+  "company": {
+    "name": "회사명",
+    "domain": "example.com"
+  },
+  "department": {
+    "name": "개발팀"
+  },
+  "first_name": "관리자",
+  "last_name": "시스템"
+}

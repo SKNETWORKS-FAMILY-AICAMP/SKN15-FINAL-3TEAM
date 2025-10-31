@@ -5,9 +5,13 @@ Django settings for Patent Analysis System (PatentAI)
 import os
 from pathlib import Path
 from datetime import timedelta
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load environment variables from .env file
+load_dotenv(BASE_DIR / '.env')
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-development-key-change-in-production')
@@ -37,9 +41,6 @@ INSTALLED_APPS = [
 
     # Local apps
     'accounts',
-    'patents',
-    'chat',
-    'history',
     'chatbot',
 ]
 
@@ -83,11 +84,11 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'patentdb',
-        'USER': 'final_play',
-        'PASSWORD': '1q2w3e4r',
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'NAME': os.getenv('DB_NAME', 'patentdb'),
+        'USER': os.getenv('DB_USER', 'final_play'),
+        'PASSWORD': os.getenv('DB_PASSWORD', ''),
+        'HOST': os.getenv('DB_HOST', 'localhost'),
+        'PORT': os.getenv('DB_PORT', '5432'),
         'CONN_MAX_AGE': 600,
         'OPTIONS': {
             'connect_timeout': 10,
@@ -149,7 +150,7 @@ AUTH_USER_MODEL = 'accounts.User'
 # CORS Settings (Next.js Frontend)
 CORS_ALLOWED_ORIGINS = os.getenv(
     'CORS_ALLOWED_ORIGINS',
-    'http://localhost:3000,http://127.0.0.1:3000'
+    'http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:3002,http://127.0.0.1:3002'
 ).split(',')
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = [
@@ -230,10 +231,18 @@ SPECTACULAR_SETTINGS = {
 }
 
 
+# Chatbot Model Settings
+# 'kosbert': KoSBERT 기반 검색 모델 (기본값)
+# 'llama': LLaMA 8B 모델
+CHATBOT_SERVICE = os.getenv('CHATBOT_SERVICE', 'kosbert')
+
 # LLaMA Model Settings
-CHATBOT_SERVICE = os.getenv('CHATBOT_SERVICE', 'llama')
 MODEL_SERVER_URL = os.getenv('MODEL_SERVER_URL', 'http://localhost:8001')
 LLAMA_MODEL_NAME = os.getenv('LLAMA_MODEL_NAME', 'meta-llama/Llama-3.2-3B-Instruct')  # LLaMA 3.2 3B 사용
+
+# KoSBERT Model Settings
+KOSBERT_MODEL_NAME = os.getenv('KOSBERT_MODEL_NAME', 'BM-K/KoSimCSE-roberta')
+KOSBERT_CACHE_DIR = os.getenv('KOSBERT_CACHE_DIR', None)  # None이면 기본 캐시 디렉토리 사용 (~/.cache/huggingface)
 
 
 # File Upload Settings

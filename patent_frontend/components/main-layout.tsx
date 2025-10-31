@@ -1,4 +1,5 @@
 "use client"
+import { API_BASE_URL } from "@/lib/config"
 
 import type React from "react"
 
@@ -11,7 +12,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
 export function MainLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -65,39 +65,20 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
     try {
       let count = 0
 
-      // 슈퍼 관리자: 관리자 권한 요청 + 비밀번호 초기화 요청
-      if (user?.role === "super_admin") {
-        const [adminReqRes, passwordReqRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/api/accounts/admin-requests/`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          fetch(`${API_BASE_URL}/api/accounts/password-resets/`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-        ])
-
-        if (adminReqRes.ok) {
-          const data = await adminReqRes.json()
-          const requests = data.requests || data
-          count += Array.isArray(requests) ? requests.filter((r: any) => r.status === "pending").length : 0
-        }
-
-        if (passwordReqRes.ok) {
-          const data = await passwordReqRes.json()
-          const resets = data.resets || []
-          count += resets.filter((r: any) => r.status === "pending").length
-        }
-      }
-      // 부서 관리자: 비밀번호 초기화 요청만
-      else if (user?.role === "dept_admin") {
-        const response = await fetch(`${API_BASE_URL}/api/accounts/password-resets/`, {
+      // 슈퍼 관리자와 부서 관리자 모두 통합 admin-requests API 사용
+      if (user?.role === "super_admin" || user?.role === "dept_admin") {
+        const response = await fetch(`${API_BASE_URL}/api/accounts/admin-requests/`, {
           headers: { Authorization: `Bearer ${token}` },
         })
 
         if (response.ok) {
           const data = await response.json()
-          const resets = data.resets || []
-          count = resets.filter((r: any) => r.status === "pending").length
+          const requests = data.requests || data
+
+          if (Array.isArray(requests)) {
+            // pending 상태인 요청만 카운트
+            count = requests.filter((r: any) => r.status === "pending").length
+          }
         }
       }
 
@@ -175,7 +156,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-[#F9FAFB]">
+    <div className="min-h-screen">
       <header className="fixed top-0 left-0 right-0 h-16 bg-white shadow-md z-50">
         <div className="h-full px-6 flex items-center justify-between">
           <Link href="/" className="text-xl font-bold text-foreground hover:text-blue-500 transition-colors">
@@ -275,7 +256,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="pt-16 h-screen">{children}</main>
+      <main className="pt-16 h-screen overflow-hidden">{children}</main>
 
       {/* 비밀번호 변경 모달 */}
       {showPasswordChange && (

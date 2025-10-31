@@ -98,28 +98,48 @@ def send_message(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def list_conversations(request):
-    """사용자의 대화 목록 조회"""
-    conversations = Conversation.objects.filter(user=request.user)
+    """
+    대화 목록 조회
+
+    Query Parameters:
+        - my=true: 내 대화만 조회 (기본값)
+        - my=false: 부서 전체 대화 조회
+    """
+    user = request.user
+    my_only = request.query_params.get('my', 'true').lower() == 'true'
+
+    if my_only:
+        # 내 대화만
+        conversations = Conversation.objects.filter(user=user)
+    else:
+        # 부서 전체 대화 (같은 회사, 같은 부서의 모든 사용자 대화)
+        conversations = Conversation.objects.filter(
+            user__company=user.company,
+            user__department=user.department
+        ).select_related('user')
+
+    conversations = conversations.order_by('-updated_at')
     serializer = ConversationListSerializer(conversations, many=True)
     return Response(serializer.data)
 
 
-@api_view(['GET'])
+@api_view(['GET', 'DELETE'])
 @permission_classes([IsAuthenticated])
-def get_conversation(request, conversation_id):
-    """특정 대화 상세 조회 (메시지 포함)"""
+def conversation_detail(request, conversation_id):
+    """
+    특정 대화 조회 및 삭제
+    - GET: 대화 상세 조회 (메시지 포함)
+    - DELETE: 대화 삭제
+    """
     conversation = get_object_or_404(Conversation, id=conversation_id, user=request.user)
-    serializer = ConversationSerializer(conversation)
-    return Response(serializer.data)
 
+    if request.method == 'GET':
+        serializer = ConversationSerializer(conversation)
+        return Response(serializer.data)
 
-@api_view(['DELETE'])
-@permission_classes([IsAuthenticated])
-def delete_conversation(request, conversation_id):
-    """대화 삭제"""
-    conversation = get_object_or_404(Conversation, id=conversation_id, user=request.user)
-    conversation.delete()
-    return Response({'message': '대화가 삭제되었습니다.'}, status=status.HTTP_200_OK)
+    elif request.method == 'DELETE':
+        conversation.delete()
+        return Response({'message': '대화가 삭제되었습니다.'}, status=status.HTTP_200_OK)
 
 
 @api_view(['PATCH'])

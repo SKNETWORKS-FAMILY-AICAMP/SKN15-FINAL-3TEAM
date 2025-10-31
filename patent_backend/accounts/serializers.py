@@ -5,7 +5,7 @@ API 데이터 직렬화 (Serializers)
 from rest_framework import serializers
 from django.utils import timezone
 from datetime import timedelta
-from .models import Company, Department, User, AdminRequest, PasswordResetRequest, SearchHistory
+from .models import Company, Department, User, AdminRequest, SearchHistory
 
 
 # ======================================================
@@ -108,9 +108,17 @@ class RegisterSerializer(serializers.ModelSerializer):
         ]
 
     def validate_username(self, value):
-        """username 중복 확인"""
+        """username 유효성 및 중복 확인"""
+        import re
+
+        # 영어, 숫자, 언더스코어만 허용
+        if not re.match(r'^[a-zA-Z0-9_]+$', value):
+            raise serializers.ValidationError('아이디는 영어, 숫자, 언더스코어(_)만 사용할 수 있습니다.')
+
+        # 중복 확인
         if User.objects.filter(username=value).exists():
             raise serializers.ValidationError('이미 존재하는 사용자명입니다.')
+
         return value
 
     def validate_email(self, value):
@@ -128,7 +136,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        """사용자 생성"""
+        """사용자 생성 및 승인 요청 자동 생성"""
         validated_data.pop('password_confirm')
         password = validated_data.pop('password')
 
@@ -140,8 +148,21 @@ class RegisterSerializer(serializers.ModelSerializer):
             department=validated_data.get('department'),
             first_name=validated_data.get('first_name', ''),
             last_name=validated_data.get('last_name', ''),
-            status='active'  # 기본값: 활성화 (즉시 로그인 가능)
+            role='user',
+            status='pending'  # 관리자 승인 대기 상태
         )
+
+        # 회원가입 승인 요청 자동 생성
+        from .models import AdminRequest
+        AdminRequest.objects.create(
+            request_type='user_approval',
+            user=user,
+            company=user.company,
+            department=user.department,
+            status='pending',
+            comment='회원가입 승인 요청'
+        )
+
         return user
 
 
@@ -206,24 +227,32 @@ class UserUpdateSerializer(serializers.ModelSerializer):
 
 
 # ======================================================
-# AdminRequest Serializers
+# AdminRequest Serializers (통합 요청 관리)
 # ======================================================
 
 class AdminRequestSerializer(serializers.ModelSerializer):
-    """부서 관리자 권한 요청"""
+    """통합 요청 조회 (회원 승인, 부서 관리자 권한, 비밀번호 초기화)"""
     user_name = serializers.CharField(source='user.username', read_only=True)
-    company_name = serializers.CharField(source='company.name', read_only=True)
-    department_name = serializers.CharField(source='department.name', read_only=True)
+    user_email = serializers.CharField(source='user.email', read_only=True)
+    target_user_name = serializers.CharField(source='target_user.username', read_only=True, allow_null=True)
+    target_user_email = serializers.CharField(source='target_user.email', read_only=True, allow_null=True)
+    company_name = serializers.CharField(source='company.name', read_only=True, allow_null=True)
+    department_name = serializers.CharField(source='department.name', read_only=True, allow_null=True)
     handled_by_name = serializers.CharField(source='handled_by.username', read_only=True, allow_null=True)
+    request_type_display = serializers.CharField(source='get_request_type_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
 
     class Meta:
         model = AdminRequest
         fields = [
-            'request_id', 'user', 'user_name',
+            'request_id', 'request_type', 'request_type_display',
+            'user', 'user_name', 'user_email',
+            'target_user', 'target_user_name', 'target_user_email',
             'company', 'company_name',
             'department', 'department_name',
+            'status', 'status_display',
             'requested_at', 'handled_by', 'handled_by_name',
-            'handled_at', 'status', 'note'
+            'handled_at', 'comment'
         ]
         read_only_fields = [
             'request_id', 'requested_at', 'handled_by',
@@ -231,109 +260,87 @@ class AdminRequestSerializer(serializers.ModelSerializer):
         ]
 
 
-class AdminRequestCreateSerializer(serializers.ModelSerializer):
-    """부서 관리자 권한 요청 생성"""
-    class Meta:
-        model = AdminRequest
-        fields = ['department', 'note']
+class AdminRequestCreateSerializer(serializers.Serializer):
+    """통합 요청 생성 (회원 승인, 부서 관리자 권한, 비밀번호 초기화)"""
+    request_type = serializers.ChoiceField(
+        choices=['user_approval', 'dept_admin', 'password_reset'],
+        required=True
+    )
+    department_id = serializers.IntegerField(required=False, allow_null=True)
+    target_user_id = serializers.UUIDField(required=False, allow_null=True)
+    comment = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+    def validate(self, data):
+        """요청 타입별 필수 필드 검증"""
+        request_type = data.get('request_type')
+
+        if request_type == 'dept_admin' and not data.get('department_id'):
+            raise serializers.ValidationError({
+                'department_id': '부서 관리자 권한 요청 시 부서를 선택해야 합니다.'
+            })
+
+        if request_type == 'password_reset' and not data.get('target_user_id'):
+            raise serializers.ValidationError({
+                'target_user_id': '비밀번호 초기화 요청 시 대상 사용자를 선택해야 합니다.'
+            })
+
+        return data
 
     def create(self, validated_data):
         """요청 생성"""
         user = self.context['request'].user
+        request_type = validated_data['request_type']
 
-        # 이미 대기 중인 요청이 있는지 확인
+        # 중복 요청 확인
         existing_request = AdminRequest.objects.filter(
             user=user,
-            department=validated_data['department'],
+            request_type=request_type,
             status='pending'
-        ).first()
+        )
 
-        if existing_request:
+        if request_type == 'dept_admin' and validated_data.get('department_id'):
+            existing_request = existing_request.filter(department_id=validated_data['department_id'])
+        elif request_type == 'password_reset' and validated_data.get('target_user_id'):
+            existing_request = existing_request.filter(target_user_id=validated_data['target_user_id'])
+
+        if existing_request.exists():
             raise serializers.ValidationError('이미 처리 대기 중인 요청이 있습니다.')
 
-        # company 자동 설정
-        return AdminRequest.objects.create(
-            user=user,
-            company=user.company,
-            **validated_data
-        )
+        # 요청 생성
+        request_data = {
+            'user': user,
+            'request_type': request_type,
+            'comment': validated_data.get('comment', '')
+        }
+
+        if request_type == 'user_approval':
+            request_data['company'] = user.company
+            request_data['department'] = user.department
+        elif request_type == 'dept_admin':
+            from .models import Department
+            department = Department.objects.get(department_id=validated_data['department_id'])
+            request_data['company'] = user.company
+            request_data['department'] = department
+        elif request_type == 'password_reset':
+            target_user = User.objects.get(user_id=validated_data['target_user_id'])
+            request_data['target_user'] = target_user
+
+        return AdminRequest.objects.create(**request_data)
 
 
 class AdminRequestHandleSerializer(serializers.Serializer):
-    """부서 관리자 권한 요청 처리 (승인/거부)"""
+    """통합 요청 처리 (승인/거부)"""
     status = serializers.ChoiceField(
         choices=['approved', 'rejected'],
         required=True
     )
-    note = serializers.CharField(required=False, allow_blank=True)
-
-
-# ======================================================
-# PasswordResetRequest Serializers
-# ======================================================
-
-class PasswordResetRequestSerializer(serializers.ModelSerializer):
-    """비밀번호 초기화 요청"""
-    user_name = serializers.CharField(source='user.username', read_only=True)
-    requested_by_name = serializers.CharField(source='requested_by.username', read_only=True)
-    user_email = serializers.CharField(source='user.email', read_only=True)
-    user_department = serializers.CharField(source='user.department.name', read_only=True)
-
-    class Meta:
-        model = PasswordResetRequest
-        fields = [
-            'reset_id', 'user', 'user_name', 'user_email', 'user_department',
-            'requested_by', 'requested_by_name',
-            'status', 'requested_at', 'handled_at'
-        ]
-        read_only_fields = [
-            'reset_id', 'requested_by',
-            'status', 'requested_at', 'handled_at'
-        ]
-
-
-class PasswordResetRequestCreateSerializer(serializers.Serializer):
-    """비밀번호 초기화 요청 생성 (슈퍼 관리자 전용)"""
-    user_id = serializers.UUIDField(required=True)
+    comment = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     temp_password = serializers.CharField(
-        required=True,
-        min_length=8,
-        write_only=True,
-        help_text='임시 비밀번호 (최소 8자)'
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        help_text='비밀번호 초기화 요청 승인 시 임시 비밀번호'
     )
-
-    def validate_user_id(self, value):
-        """대상 사용자 확인"""
-        try:
-            user = User.objects.get(user_id=value)
-            # 부서 관리자만 초기화 가능
-            if user.role != 'dept_admin':
-                raise serializers.ValidationError('부서 관리자만 비밀번호 초기화가 가능합니다.')
-            return value
-        except User.DoesNotExist:
-            raise serializers.ValidationError('존재하지 않는 사용자입니다.')
-
-    def create(self, validated_data):
-        """임시 비밀번호 발급"""
-        user = User.objects.get(user_id=validated_data['user_id'])
-        requested_by = self.context['request'].user
-        temp_password = validated_data['temp_password']
-
-        # 임시 비밀번호 설정
-        user.set_password(temp_password)
-        user.save()
-
-        # 요청 기록 생성
-        reset_request = PasswordResetRequest.objects.create(
-            user=user,
-            requested_by=requested_by,
-            temp_password=temp_password,  # 평문 저장 (슈퍼 관리자가 전달해야 하므로)
-            expires_at=timezone.now() + timedelta(days=7),  # 7일 후 만료
-            status='completed',
-            handled_at=timezone.now()
-        )
-
-        return reset_request
 
 
 # ======================================================
@@ -357,81 +364,10 @@ class UserRoleUpdateSerializer(serializers.Serializer):
 
 
 # ======================================================
-# Admin Registration Serializer (관리자 회원가입)
+# 참고: 관리자 회원가입 기능은 제거되었습니다.
+# 모든 사용자는 일반 회원가입(RegisterSerializer)을 통해 등록하고,
+# 슈퍼 관리자가 필요 시 부서 관리자로 승격합니다.
 # ======================================================
-
-class AdminRegisterSerializer(serializers.ModelSerializer):
-    """관리자 회원가입용 Serializer (부서 관리자 전용)"""
-    password = serializers.CharField(
-        write_only=True,
-        required=True,
-        min_length=8,
-        style={'input_type': 'password'},
-        help_text='최소 8자 이상'
-    )
-    password_confirm = serializers.CharField(
-        write_only=True,
-        required=True,
-        style={'input_type': 'password'},
-        help_text='비밀번호 확인'
-    )
-
-    class Meta:
-        model = User
-        fields = [
-            'username', 'email', 'password', 'password_confirm',
-            'company', 'department',
-            'first_name', 'last_name'
-        ]
-
-    def validate_username(self, value):
-        """username 중복 확인"""
-        if User.objects.filter(username=value).exists():
-            raise serializers.ValidationError('이미 존재하는 사용자명입니다.')
-        return value
-
-    def validate_email(self, value):
-        """email 중복 확인"""
-        if User.objects.filter(email=value).exists():
-            raise serializers.ValidationError('이미 사용 중인 이메일입니다.')
-        return value
-
-    def validate(self, attrs):
-        """비밀번호 일치 확인"""
-        if attrs['password'] != attrs['password_confirm']:
-            raise serializers.ValidationError({
-                'password_confirm': '비밀번호가 일치하지 않습니다.'
-            })
-        return attrs
-
-    def create(self, validated_data):
-        """부서 관리자 사용자 생성"""
-        validated_data.pop('password_confirm')
-        password = validated_data.pop('password')
-
-        # 부서 관리자로 생성 (일반 유저처럼 pending 상태, 즉시 로그인 가능)
-        user = User.objects.create_user(
-            username=validated_data['username'],
-            email=validated_data['email'],
-            password=password,
-            company=validated_data['company'],
-            department=validated_data.get('department'),
-            first_name=validated_data.get('first_name', ''),
-            last_name=validated_data.get('last_name', ''),
-            role='user',  # 초기에는 일반 유저로 생성
-            status='active'  # 즉시 로그인 가능
-        )
-
-        # 관리자 권한 요청 자동 생성
-        if validated_data.get('department'):
-            AdminRequest.objects.create(
-                user=user,
-                company=validated_data['company'],
-                department=validated_data['department'],
-                note='관리자 회원가입 시 자동 생성된 권한 요청'
-            )
-
-        return user
 
 
 # ======================================================
@@ -439,34 +375,29 @@ class AdminRegisterSerializer(serializers.ModelSerializer):
 # ======================================================
 
 class SearchHistorySerializer(serializers.ModelSerializer):
-    """검색 히스토리 조회용"""
+    """검색 히스토리 조회용 (통합 챗봇)"""
     company_name = serializers.CharField(source='company.name', read_only=True)
     department_name = serializers.CharField(source='department.name', read_only=True)
     created_by_name = serializers.CharField(source='created_by.username', read_only=True)
-    search_type_display = serializers.CharField(source='get_search_type_display', read_only=True)
 
     class Meta:
         model = SearchHistory
         fields = [
             'history_id', 'company', 'company_name',
             'department', 'department_name',
-            'query', 'search_type', 'search_type_display',
-            'results_count', 'results_summary',
+            'query', 'results_count',
             'created_by', 'created_by_name',
-            'created_at', 'is_shared'
+            'created_at'
         ]
         read_only_fields = ['history_id', 'created_at']
 
 
 class SearchHistoryCreateSerializer(serializers.ModelSerializer):
-    """검색 히스토리 생성용"""
+    """검색 히스토리 생성용 (통합 챗봇)"""
 
     class Meta:
         model = SearchHistory
-        fields = [
-            'query', 'search_type', 'results_count',
-            'results_summary', 'is_shared'
-        ]
+        fields = ['query', 'results_count']
 
     def create(self, validated_data):
         """검색 히스토리 생성"""

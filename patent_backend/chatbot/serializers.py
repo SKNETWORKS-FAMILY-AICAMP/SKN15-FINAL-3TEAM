@@ -33,10 +33,12 @@ class ConversationListSerializer(serializers.ModelSerializer):
     """대화 목록 시리얼라이저 (메시지 제외)"""
     message_count = serializers.SerializerMethodField()
     last_message = serializers.SerializerMethodField()
+    user_name = serializers.CharField(source='user.username', read_only=True)
+    user_id = serializers.UUIDField(source='user.id', read_only=True)
 
     class Meta:
         model = Conversation
-        fields = ['id', 'title', 'created_at', 'updated_at', 'message_count', 'last_message']
+        fields = ['id', 'title', 'user_name', 'user_id', 'created_at', 'updated_at', 'message_count', 'last_message']
         read_only_fields = ['id', 'created_at', 'updated_at']
 
     def get_message_count(self, obj):

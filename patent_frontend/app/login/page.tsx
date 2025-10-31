@@ -1,4 +1,5 @@
 "use client"
+import { API_BASE_URL } from "@/lib/config"
 
 import type React from "react"
 
@@ -11,7 +12,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label"
 
 // API 베이스 URL
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
 interface Company {
   company_id: number
@@ -143,6 +143,14 @@ export default function LoginPage() {
     setIsLoading(true)
     setError("")
 
+    // 아이디 유효성 검사 (영어, 숫자, 언더스코어만 허용)
+    const usernameRegex = /^[a-zA-Z0-9_]+$/
+    if (!usernameRegex.test(username)) {
+      setError("아이디는 영어, 숫자, 언더스코어(_)만 사용할 수 있습니다")
+      setIsLoading(false)
+      return
+    }
+
     // 비밀번호 확인
     if (password !== confirmPassword) {
       setError("비밀번호가 일치하지 않습니다")
@@ -178,7 +186,7 @@ export default function LoginPage() {
       const data = await response.json()
 
       if (response.ok) {
-        alert("회원가입이 완료되었습니다.")
+        alert("회원가입이 완료되었습니다. 관리자 승인 후 로그인 가능합니다.")
         setIsSignup(false)
         // 폼 초기화
         setUsername("")
@@ -444,13 +452,6 @@ export default function LoginPage() {
                   className="text-sm text-orange-500 hover:underline block w-full"
                 >
                   비밀번호 초기화 요청
-                </button>
-                <button
-                  type="button"
-                  onClick={() => router.push("/admin-register")}
-                  className="text-sm text-gray-600 hover:underline block w-full"
-                >
-                  관리자 회원가입
                 </button>
               </div>
             </form>

@@ -4,7 +4,7 @@ Django Admin 설정
 
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import Company, Department, User, AdminRequest, PasswordResetRequest
+from .models import Company, Department, User, AdminRequest
 
 
 # ======================================================
@@ -93,47 +93,23 @@ class UserAdmin(BaseUserAdmin):
 
 @admin.register(AdminRequest)
 class AdminRequestAdmin(admin.ModelAdmin):
-    """부서 관리자 권한 요청 관리자 페이지"""
+    """통합 요청 관리자 페이지 (회원 승인, 부서 관리자 권한, 비밀번호 초기화)"""
 
-    list_display = ['request_id', 'user', 'department', 'status', 'requested_at', 'handled_by', 'handled_at']
-    list_filter = ['status', 'requested_at', 'handled_at']
-    search_fields = ['user__username', 'department__name', 'note']
+    list_display = ['request_id', 'request_type', 'user', 'target_user', 'department', 'status', 'requested_at', 'handled_by', 'handled_at']
+    list_filter = ['request_type', 'status', 'requested_at', 'handled_at']
+    search_fields = ['user__username', 'target_user__username', 'department__name', 'comment']
     readonly_fields = ['request_id', 'requested_at', 'handled_at']
     ordering = ['-requested_at']
 
     fieldsets = (
-        ('요청 정보', {
-            'fields': ('request_id', 'user', 'department', 'requested_at')
+        ('요청 기본 정보', {
+            'fields': ('request_id', 'request_type', 'user', 'target_user', 'requested_at')
+        }),
+        ('소속 정보', {
+            'fields': ('company', 'department')
         }),
         ('처리 정보', {
-            'fields': ('status', 'handled_by', 'handled_at', 'note')
-        }),
-    )
-
-
-# ======================================================
-# PasswordResetRequest Admin
-# ======================================================
-
-@admin.register(PasswordResetRequest)
-class PasswordResetRequestAdmin(admin.ModelAdmin):
-    """비밀번호 초기화 요청 관리자 페이지"""
-
-    list_display = ['reset_id', 'user', 'requested_by', 'status', 'requested_at', 'handled_at']
-    list_filter = ['status', 'requested_at']
-    search_fields = ['user__username', 'requested_by__username']
-    readonly_fields = ['reset_id', 'requested_at', 'handled_at']
-    ordering = ['-requested_at']
-
-    fieldsets = (
-        ('대상 사용자', {
-            'fields': ('reset_id', 'user')
-        }),
-        ('요청 정보', {
-            'fields': ('requested_by', 'requested_at')
-        }),
-        ('처리 정보', {
-            'fields': ('status', 'handled_at')
+            'fields': ('status', 'handled_by', 'handled_at', 'comment')
         }),
     )
 

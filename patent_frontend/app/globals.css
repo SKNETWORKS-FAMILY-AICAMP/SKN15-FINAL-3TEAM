@@ -124,3 +124,11 @@
     @apply bg-background text-foreground;
   }
 }
+
+.search-filter-container {
+  max-height: 384px !important;
+}
+
+.chatbot-messages-container {
+  min-height: 0 !important;
+}

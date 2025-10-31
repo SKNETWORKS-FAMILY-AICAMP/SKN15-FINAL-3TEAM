@@ -3,8 +3,8 @@
 - Company (회사)
 - Department (부서)
 - User (사용자)
-- AdminRequest (부서 관리자 승인 요청)
-- PasswordResetRequest (비밀번호 초기화 요청)
+- AdminRequest (통합 요청 관리: 회원 승인, 부서 관리자 권한, 비밀번호 초기화)
+- SearchHistory (검색 히스토리)
 """
 
 import uuid
@@ -152,12 +152,12 @@ class User(AbstractBaseUser, PermissionsMixin):
     role = models.CharField('역할', max_length=20, choices=ROLE_CHOICES, default='user')
     status = models.CharField('상태', max_length=20, choices=STATUS_CHOICES, default='pending')
 
-    # Django 필수 필드
+    # Django 필수 필드 (role/status와 자동 동기화)
     first_name = models.CharField('이름', max_length=150, blank=True, default='')
     last_name = models.CharField('성', max_length=150, blank=True, default='')
-    is_staff = models.BooleanField('스태프 권한', default=False)
-    is_active = models.BooleanField('활성 상태', default=True)
-    is_superuser = models.BooleanField('슈퍼유저 권한', default=False)
+    is_staff = models.BooleanField('스태프 권한', default=False, help_text='role에서 자동 동기화')
+    is_active = models.BooleanField('활성 상태', default=True, help_text='status에서 자동 동기화')
+    is_superuser = models.BooleanField('슈퍼유저 권한', default=False, help_text='role에서 자동 동기화')
     last_login = models.DateTimeField('마지막 로그인', blank=True, null=True)
     date_joined = models.DateTimeField('가입일', default=timezone.now)
 
@@ -211,14 +211,33 @@ class User(AbstractBaseUser, PermissionsMixin):
         from django.contrib.auth.hashers import check_password
         return check_password(raw_password, self.password_hash)
 
+    def save(self, *args, **kwargs):
+        """저장 시 role/status를 기반으로 Django 필드 자동 동기화"""
+        # role에서 is_staff, is_superuser 자동 동기화
+        self.is_staff = self.role in ['super_admin', 'dept_admin']
+        self.is_superuser = self.role == 'super_admin'
+
+        # status에서 is_active 자동 동기화
+        self.is_active = self.status == 'active'
+
+        super().save(*args, **kwargs)
+
 
 # ======================================================
-# AdminRequest 모델
+# AdminRequest 모델 (통합 요청 관리)
 # ======================================================
 
 class AdminRequest(models.Model):
-    """부서 관리자 권한 승인 요청"""
+    """관리자 권한 및 비밀번호 초기화 요청 통합 테이블"""
 
+    # 요청 타입 선택지
+    REQUEST_TYPE_CHOICES = [
+        ('user_approval', '회원 승인 요청'),
+        ('dept_admin', '부서 관리자 권한 요청'),
+        ('password_reset', '비밀번호 초기화 요청'),
+    ]
+
+    # 상태 선택지
     STATUS_CHOICES = [
         ('pending', '대기 중'),
         ('approved', '승인됨'),
@@ -226,6 +245,16 @@ class AdminRequest(models.Model):
     ]
 
     request_id = models.AutoField(primary_key=True)
+
+    # 요청 타입 (신규 컬럼)
+    request_type = models.CharField(
+        '요청 타입',
+        max_length=20,
+        choices=REQUEST_TYPE_CHOICES,
+        default='user_approval'
+    )
+
+    # 요청자 (본인)
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
@@ -233,22 +262,42 @@ class AdminRequest(models.Model):
         related_name='admin_requests',
         verbose_name='요청자'
     )
+
+    # 요청 대상자 (비밀번호 초기화 시 사용, 본인 요청 시 user와 동일)
+    target_user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        db_column='target_user_id',
+        related_name='targeted_requests',
+        verbose_name='대상자',
+        null=True,
+        blank=True
+    )
+
     company = models.ForeignKey(
         Company,
         on_delete=models.CASCADE,
         db_column='company_id',
         related_name='admin_requests',
         verbose_name='회사',
-        null=True
+        null=True,
+        blank=True
     )
     department = models.ForeignKey(
         Department,
         on_delete=models.CASCADE,
         db_column='department_id',
         related_name='admin_requests',
-        verbose_name='관리할 부서'
+        verbose_name='관리할 부서',
+        null=True,
+        blank=True
     )
+
+    # 상태 및 타임스탬프
+    status = models.CharField('상태', max_length=20, choices=STATUS_CHOICES, default='pending')
     requested_at = models.DateTimeField('요청일', auto_now_add=True)
+
+    # 처리자 정보
     handled_by = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
@@ -259,66 +308,24 @@ class AdminRequest(models.Model):
         blank=True
     )
     handled_at = models.DateTimeField('처리일', null=True, blank=True)
-    status = models.CharField('상태', max_length=20, choices=STATUS_CHOICES, default='pending')
-    note = models.TextField('비고', blank=True, default='')
+
+    # 비고 (거부 사유 등)
+    comment = models.TextField('비고', null=True, blank=True)
 
     class Meta:
         db_table = 'admin_request'
         managed = False
-        verbose_name = '관리자 권한 요청'
-        verbose_name_plural = '관리자 권한 요청 목록'
+        verbose_name = '관리 요청'
+        verbose_name_plural = '관리 요청 목록'
         ordering = ['-requested_at']
 
     def __str__(self):
-        return f"{self.user.username} → {self.department.name} ({self.get_status_display()})"
-
-
-# ======================================================
-# PasswordResetRequest 모델
-# ======================================================
-
-class PasswordResetRequest(models.Model):
-    """비밀번호 초기화 요청"""
-
-    STATUS_CHOICES = [
-        ('pending', '대기 중'),
-        ('completed', '완료됨'),
-        ('cancelled', '취소됨'),
-    ]
-
-    reset_id = models.AutoField(primary_key=True)
-    user = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        db_column='user_id',
-        related_name='password_resets',
-        verbose_name='대상 사용자'
-    )
-    requested_by = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        db_column='requested_by',
-        related_name='requested_password_resets',
-        verbose_name='요청자'
-    )
-    status = models.CharField('상태', max_length=20, choices=STATUS_CHOICES, default='pending')
-    requested_at = models.DateTimeField('요청일', auto_now_add=True)
-    handled_at = models.DateTimeField('처리일', null=True, blank=True)
-
-    class Meta:
-        db_table = 'password_reset_request'
-        managed = False
-        verbose_name = '비밀번호 초기화 요청'
-        verbose_name_plural = '비밀번호 초기화 요청 목록'
-        ordering = ['-requested_at']
-
-    def __str__(self):
-        return f"{self.user.username} (by {self.requested_by.username}) - {self.get_status_display()}"
-
-    @property
-    def is_expired(self):
-        """만료 여부 확인"""
-        return timezone.now() > self.expires_at
+        type_display = self.get_request_type_display()
+        if self.request_type == 'password_reset' and self.target_user:
+            return f"{self.user.username} → {self.target_user.username} 비밀번호 초기화 ({self.get_status_display()})"
+        elif self.department:
+            return f"{self.user.username} - {type_display} ({self.get_status_display()})"
+        return f"{self.user.username} - {type_display} ({self.get_status_display()})"
 
 
 # ======================================================
@@ -326,15 +333,7 @@ class PasswordResetRequest(models.Model):
 # ======================================================
 
 class SearchHistory(models.Model):
-    """검색 히스토리 - 회사/부서별 공유"""
-
-    SEARCH_TYPE_CHOICES = [
-        ('patent', '특허'),
-        ('paper', '논문'),
-        ('reject', '거절결정'),
-        ('law', '특허법'),
-        ('integrated', '통합검색'),
-    ]
+    """검색 히스토리 - 회사/부서별 공유 (통합 챗봇용)"""
 
     history_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     company = models.ForeignKey(Company, on_delete=models.CASCADE, verbose_name='회사')
@@ -342,17 +341,19 @@ class SearchHistory(models.Model):
 
     # 검색 정보
     query = models.TextField('검색어')
-    search_type = models.CharField('검색 유형', max_length=50, choices=SEARCH_TYPE_CHOICES)
+    search_type = models.CharField('검색 유형', max_length=50, choices=[
+        ('patent', '특허'),
+        ('paper', '논문'),
+        ('reject', '거절결정'),
+        ('law', '특허법'),
+        ('integrated', '통합검색'),
+    ])
     results_count = models.IntegerField('결과 개수', default=0)
-
-    # 검색 결과 요약 (JSON 형태)
     results_summary = models.JSONField('결과 요약', null=True, blank=True)
 
     # 메타 정보
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name='작성자')
     created_at = models.DateTimeField('생성일', auto_now_add=True)
-
-    # 공유 설정
     is_shared = models.BooleanField('부서 공유', default=True, help_text='True면 같은 부서 전체 공유')
 
     class Meta:
@@ -366,4 +367,4 @@ class SearchHistory(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.query} ({self.get_search_type_display()}) - {self.created_by.username if self.created_by else 'Unknown'}"
+        return f"{self.query} - {self.created_by.username if self.created_by else 'Unknown'}"

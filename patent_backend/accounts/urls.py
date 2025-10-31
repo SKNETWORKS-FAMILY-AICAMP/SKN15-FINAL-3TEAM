@@ -13,7 +13,7 @@ urlpatterns = [
     # 인증 관련
     # ======================================================
     path('register/', views.register, name='register'),
-    path('admin/register/', views.admin_register, name='admin-register'),
+    # admin/register 엔드포인트는 제거되었습니다. (모든 사용자는 일반 회원가입 사용)
     path('login/', views.login, name='login'),
     path('logout/', views.logout, name='logout'),
 
@@ -34,18 +34,15 @@ urlpatterns = [
     path('departments/', views.list_departments, name='list-departments'),
 
     # ======================================================
-    # 부서 관리자 권한 요청
+    # 통합 요청 관리 (회원 승인, 부서 관리자 권한, 비밀번호 초기화)
     # ======================================================
     path('admin-requests/', views.list_admin_requests, name='list-admin-requests'),
-    path('admin-requests/create/', views.request_admin_role, name='request-admin-role'),
+    path('admin-requests/create/', views.create_admin_request, name='create-admin-request'),
     path('admin-requests/<int:request_id>/handle/', views.handle_admin_request, name='handle-admin-request'),
 
-    # ======================================================
-    # 비밀번호 초기화
-    # ======================================================
-    path('password-reset/', views.reset_password, name='reset-password'),
-    path('password-resets/', views.list_password_resets, name='list-password-resets'),
-    path('password-resets/request/', views.request_password_reset, name='request-password-reset'),
+    # 하위 호환성을 위한 별칭 (기존 프론트엔드 코드가 이 URL을 사용할 경우)
+    path('admin-requests/request-admin-role/', views.create_admin_request, name='request-admin-role'),
+    path('password-resets/request/', views.create_admin_request, name='request-password-reset'),
     path('password-resets/request-anonymous/', views.request_password_reset_anonymous, name='request-password-reset-anonymous'),
 
     # ======================================================

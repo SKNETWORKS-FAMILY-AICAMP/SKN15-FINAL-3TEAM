@@ -30,7 +30,7 @@ export default function LandingPage() {
             </nav>
             <Link href="/login">
               <Button variant="default" className="bg-blue-600 hover:bg-blue-700">
-                시작하기
+                로그인
               </Button>
             </Link>
           </div>
@@ -57,13 +57,15 @@ export default function LandingPage() {
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link href="/login">
                 <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-base px-8 h-12">
-                  무료로 시작하기
+                  시작하기
                   <ArrowRight className="ml-2 w-5 h-5" />
                 </Button>
               </Link>
-              <Button size="lg" variant="outline" className="text-base px-8 h-12 bg-transparent">
-                데모 보기
-              </Button>
+              <a href="https://github.com/SKNETWORKS-FAMILY-AICAMP/SKN15-FINAL-3TEAM" target="_blank" rel="noopener noreferrer">
+                <Button size="lg" variant="outline" className="text-base px-8 h-12 bg-transparent text-white border-white hover:bg-white/10">
+                  자세히 보기
+                </Button>
+              </a>
             </div>
           </div>
 
@@ -192,8 +194,86 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Pricing Section */}
+      <section id="pricing" className="py-12 bg-gray-50">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-10">
+            <h2 className="text-3xl font-bold text-gray-900 mb-3">요금제</h2>
+            <p className="text-lg text-gray-600 max-w-2xl mx-auto">합리적인 가격으로 강력한 AI 특허 분석을 경험하세요</p>
+          </div>
+
+          <div className="max-w-3xl mx-auto">
+            <div className="bg-white rounded-xl shadow-lg border-2 border-blue-600 p-6 md:p-8">
+              <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                <div className="flex-1">
+                  <div className="inline-block px-3 py-1 bg-blue-100 text-blue-600 rounded-full text-xs font-medium mb-3">
+                    추천
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-3">Pro Plan</h3>
+                  <ul className="space-y-2">
+                    <li className="flex items-start gap-2">
+                      <div className="flex-shrink-0 w-4 h-4 bg-blue-100 rounded-full flex items-center justify-center mt-0.5">
+                        <svg className="w-2.5 h-2.5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                      <span className="text-sm text-gray-700">무제한 특허 검색</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <div className="flex-shrink-0 w-4 h-4 bg-blue-100 rounded-full flex items-center justify-center mt-0.5">
+                        <svg className="w-2.5 h-2.5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                      <span className="text-sm text-gray-700">AI 챗봇 분석</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <div className="flex-shrink-0 w-4 h-4 bg-blue-100 rounded-full flex items-center justify-center mt-0.5">
+                        <svg className="w-2.5 h-2.5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                      <span className="text-sm text-gray-700">문서 첨삭 기능</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <div className="flex-shrink-0 w-4 h-4 bg-blue-100 rounded-full flex items-center justify-center mt-0.5">
+                        <svg className="w-2.5 h-2.5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                      <span className="text-sm text-gray-700">부서 공유 기능</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <div className="flex-shrink-0 w-4 h-4 bg-blue-100 rounded-full flex items-center justify-center mt-0.5">
+                        <svg className="w-2.5 h-2.5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                      <span className="text-sm text-gray-700">24/7 고객 지원</span>
+                    </li>
+                  </ul>
+                </div>
+                <div className="flex-shrink-0 text-center">
+                  <div className="mb-4">
+                    <div className="flex items-baseline justify-center gap-1">
+                      <span className="text-4xl font-bold text-gray-900">₩30,000</span>
+                    </div>
+                    <p className="text-sm text-gray-600 mt-1">월 사용료</p>
+                  </div>
+                  <Link href="/login">
+                    <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-base px-8 h-11 w-full">
+                      결제하기
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* CTA Section */}
-      <section className="py-20 bg-gradient-to-br from-blue-600 to-blue-700">
+      <section id="cta" className="py-20 bg-gradient-to-br from-blue-600 to-blue-700">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-4xl font-bold text-white mb-6">지금 바로 시작하세요</h2>
           <p className="text-xl text-blue-100 mb-10 max-w-2xl mx-auto">

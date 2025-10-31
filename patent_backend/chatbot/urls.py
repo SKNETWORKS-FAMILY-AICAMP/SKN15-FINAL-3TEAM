@@ -13,8 +13,7 @@ urlpatterns = [
 
     # 대화 관리
     path('conversations/', views.list_conversations, name='list-conversations'),
-    path('conversations/<uuid:conversation_id>/', views.get_conversation, name='get-conversation'),
-    path('conversations/<uuid:conversation_id>/delete/', views.delete_conversation, name='delete-conversation'),
+    path('conversations/<uuid:conversation_id>/', views.conversation_detail, name='conversation-detail'),
     path('conversations/<uuid:conversation_id>/update-title/', views.update_conversation_title, name='update-title'),
 
     # 헬스체크

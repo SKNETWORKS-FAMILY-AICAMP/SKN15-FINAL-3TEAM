@@ -42,8 +42,13 @@ env/
 .env.local
 !.env.example
 
+# Superuser config (보안 주의!)
+superuser_config.json
+!superuser_config.json.example
+
 # Database
 *.sql
+!initial_schema.sql
 !initial_data.sql
 db.sqlite3
 

@@ -12,16 +12,14 @@ from django.contrib.auth import authenticate
 from django.db import transaction
 from django.utils import timezone
 
-from .models import User, Company, Department, AdminRequest, PasswordResetRequest, SearchHistory
+from .models import User, Company, Department, AdminRequest, SearchHistory
 from .serializers import (
     RegisterSerializer, LoginSerializer,
     UserSerializer, UserDetailSerializer,
     PasswordChangeSerializer, UserUpdateSerializer,
     CompanySerializer, DepartmentSerializer,
     AdminRequestSerializer, AdminRequestCreateSerializer, AdminRequestHandleSerializer,
-    PasswordResetRequestSerializer, PasswordResetRequestCreateSerializer,
     UserStatusUpdateSerializer, UserRoleUpdateSerializer,
-    AdminRegisterSerializer,
     SearchHistorySerializer, SearchHistoryCreateSerializer,
 )
 
@@ -76,52 +74,10 @@ def register(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def admin_register(request):
-    """
-    관리자 회원가입 API (부서 관리자 권한 요청)
-
-    POST /api/accounts/admin/register/
-    {
-        "username": "admin1",
-        "email": "admin1@tech.com",
-        "password": "Admin1234!",
-        "password_confirm": "Admin1234!",
-        "company": 1,
-        "department": 1,
-        "first_name": "길동",
-        "last_name": "홍"
-    }
-    """
-    serializer = AdminRegisterSerializer(data=request.data)
-
-    if serializer.is_valid():
-        try:
-            with transaction.atomic():
-                user = serializer.save()
-
-                # JWT 토큰 생성 (즉시 로그인 가능)
-                refresh = RefreshToken.for_user(user)
-
-                message = '회원가입이 완료되었습니다. 관리자 권한은 슈퍼 관리자의 승인 후 부여됩니다.'
-
-                return Response({
-                    'message': message,
-                    'user': UserSerializer(user).data,
-                    'tokens': {
-                        'refresh': str(refresh),
-                        'access': str(refresh.access_token),
-                    }
-                }, status=status.HTTP_201_CREATED)
-
-        except Exception as e:
-            return Response({
-                'error': '회원가입 중 오류가 발생했습니다.',
-                'detail': str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+# ======================================================
+# 참고: 관리자 회원가입 엔드포인트(admin_register)는 제거되었습니다.
+# 모든 사용자는 register 엔드포인트로 가입합니다.
+# ======================================================
 
 
 @api_view(['POST'])
@@ -142,40 +98,51 @@ def login(request):
         username = serializer.validated_data['username']
         password = serializer.validated_data['password']
 
-        # 사용자 인증
-        user = authenticate(request, username=username, password=password)
-
-        if user is not None:
-            # 계정 상태 확인
-            if user.status == 'suspended':
-                return Response({
-                    'error': '정지된 계정입니다. 관리자에게 문의하세요.'
-                }, status=status.HTTP_403_FORBIDDEN)
-
-            if not user.is_active:
-                return Response({
-                    'error': '비활성화된 계정입니다.'
-                }, status=status.HTTP_403_FORBIDDEN)
-
-            # JWT 토큰 생성
-            refresh = RefreshToken.for_user(user)
-
-            # 마지막 로그인 시간 업데이트
-            user.last_login = timezone.now()
-            user.save(update_fields=['last_login'])
-
-            return Response({
-                'message': '로그인 성공',
-                'user': UserDetailSerializer(user).data,
-                'tokens': {
-                    'refresh': str(refresh),
-                    'access': str(refresh.access_token),
-                }
-            }, status=status.HTTP_200_OK)
-        else:
+        # 사용자 조회 (is_active 여부와 관계없이)
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
             return Response({
                 'error': '사용자명 또는 비밀번호가 올바르지 않습니다.'
             }, status=status.HTTP_401_UNAUTHORIZED)
+
+        # 비밀번호 확인
+        if not user.check_password(password):
+            return Response({
+                'error': '사용자명 또는 비밀번호가 올바르지 않습니다.'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+
+        # 계정 상태 확인
+        if user.status == 'pending':
+            return Response({
+                'error': '승인되지 않은 계정입니다. 관리자에게 문의하세요.'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        if user.status == 'suspended':
+            return Response({
+                'error': '정지된 계정입니다. 관리자에게 문의하세요.'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        if not user.is_active:
+            return Response({
+                'error': '비활성화된 계정입니다.'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        # JWT 토큰 생성
+        refresh = RefreshToken.for_user(user)
+
+        # 마지막 로그인 시간 업데이트
+        user.last_login = timezone.now()
+        user.save(update_fields=['last_login'])
+
+        return Response({
+            'message': '로그인 성공',
+            'user': UserDetailSerializer(user).data,
+            'tokens': {
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
+            }
+        }, status=status.HTTP_200_OK)
 
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -325,24 +292,38 @@ def request_admin_role(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def list_admin_requests(request):
-    """부서 관리자 권한 요청 목록 조회"""
+    """통합 요청 목록 조회 (회원 승인, 부서 관리자 권한, 비밀번호 초기화)"""
     user = request.user
 
-    # 슈퍼 관리자는 같은 회사의 요청만 조회
+    # 권한별 요청 조회 범위 설정
     if user.is_super_admin:
+        # 슈퍼 관리자: 같은 회사의 모든 요청
         requests = AdminRequest.objects.filter(user__company=user.company)
+    elif user.is_dept_admin:
+        # 부서 관리자: 자신의 부서 + 자신이 요청한 것
+        requests = AdminRequest.objects.filter(
+            user__department=user.department
+        ) | AdminRequest.objects.filter(user=user)
     else:
-        # 일반 사용자는 자신의 요청만 조회
+        # 일반 사용자: 자신의 요청만
         requests = AdminRequest.objects.filter(user=user)
 
-    # 상태 필터링
+    # 필터링
     status_filter = request.query_params.get('status')
+    request_type_filter = request.query_params.get('request_type')
+
     if status_filter:
         requests = requests.filter(status=status_filter)
+    if request_type_filter:
+        requests = requests.filter(request_type=request_type_filter)
 
-    serializer = AdminRequestSerializer(requests, many=True)
+    # 부서 관리자는 비밀번호 초기화 요청 시 일반 유저의 요청만 조회
+    if user.is_dept_admin and request_type_filter == 'password_reset':
+        requests = requests.filter(user__role='user')
+
+    serializer = AdminRequestSerializer(requests.distinct(), many=True)
     return Response({
-        'count': requests.count(),
+        'count': requests.distinct().count(),
         'requests': serializer.data
     }, status=status.HTTP_200_OK)
 
@@ -350,13 +331,13 @@ def list_admin_requests(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def handle_admin_request(request, request_id):
-    """부서 관리자 권한 요청 처리 (슈퍼 관리자 전용)"""
+    """통합 요청 처리 (회원 승인, 부서 관리자 권한, 비밀번호 초기화)"""
     user = request.user
 
-    # 슈퍼 관리자 권한 확인
-    if not user.is_super_admin:
+    # 권한 확인 (슈퍼 관리자 또는 부서 관리자)
+    if not (user.is_super_admin or user.is_dept_admin):
         return Response({
-            'error': '슈퍼 관리자 권한이 필요합니다.'
+            'error': '관리자 권한이 필요합니다.'
         }, status=status.HTTP_403_FORBIDDEN)
 
     try:
@@ -379,120 +360,76 @@ def handle_admin_request(request, request_id):
             admin_request.status = serializer.validated_data['status']
             admin_request.handled_by = user
             admin_request.handled_at = timezone.now()
-            admin_request.note = serializer.validated_data.get('note', admin_request.note)
+            if serializer.validated_data.get('comment'):
+                admin_request.comment = serializer.validated_data['comment']
             admin_request.save()
 
-            # 승인된 경우 사용자 역할 업데이트
+            # 요청 타입별 처리
             if admin_request.status == 'approved':
-                target_user = admin_request.user
-                target_user.role = 'dept_admin'
-                target_user.status = 'active'
-                target_user.save()
+                if admin_request.request_type == 'user_approval':
+                    # 회원 승인: 사용자 활성화
+                    target_user = admin_request.user
+                    target_user.status = 'active'
+                    target_user.save()
 
-        return Response({
+                elif admin_request.request_type == 'dept_admin':
+                    # 부서 관리자 권한: 역할 및 상태 변경
+                    target_user = admin_request.user
+                    target_user.role = 'dept_admin'
+                    target_user.status = 'active'
+                    target_user.save()
+
+                elif admin_request.request_type == 'password_reset':
+                    # 비밀번호 초기화: 임시 비밀번호 설정
+                    temp_password = serializer.validated_data.get('temp_password')
+                    if not temp_password:
+                        return Response({
+                            'error': '비밀번호 초기화 승인 시 임시 비밀번호를 입력해야 합니다.'
+                        }, status=status.HTTP_400_BAD_REQUEST)
+
+                    target_user = admin_request.target_user
+                    target_user.set_password(temp_password)
+                    target_user.save()
+
+                    # 비밀번호 변경 시 comment에 기록
+                    admin_request.comment = f"임시 비밀번호 발급 완료: {temp_password}"
+                    admin_request.save()
+
+        response_data = {
             'message': f'요청이 {"승인" if admin_request.status == "approved" else "거부"}되었습니다.',
             'request': AdminRequestSerializer(admin_request).data
-        }, status=status.HTTP_200_OK)
+        }
+
+        # 비밀번호 초기화 승인 시 임시 비밀번호 반환
+        if admin_request.request_type == 'password_reset' and admin_request.status == 'approved':
+            response_data['temp_password'] = serializer.validated_data.get('temp_password')
+
+        return Response(response_data, status=status.HTTP_200_OK)
 
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 # ======================================================
-# 비밀번호 초기화 API (슈퍼 관리자 → 부서 관리자)
+# 통합 요청 생성 API
 # ======================================================
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def reset_password(request):
-    """비밀번호 초기화 (슈퍼 관리자 전용)"""
-    user = request.user
-
-    if not user.is_super_admin:
-        return Response({
-            'error': '슈퍼 관리자 권한이 필요합니다.'
-        }, status=status.HTTP_403_FORBIDDEN)
-
-    serializer = PasswordResetRequestCreateSerializer(
+def create_admin_request(request):
+    """통합 요청 생성 (회원 승인, 부서 관리자 권한, 비밀번호 초기화)"""
+    serializer = AdminRequestCreateSerializer(
         data=request.data,
         context={'request': request}
     )
 
     if serializer.is_valid():
-        reset_request = serializer.save()
+        admin_request = serializer.save()
         return Response({
-            'message': '임시 비밀번호가 발급되었습니다.',
-            'temp_password': request.data['temp_password'],  # 슈퍼 관리자에게만 표시
-            'reset': PasswordResetRequestSerializer(reset_request).data
+            'message': '요청이 생성되었습니다.',
+            'request': AdminRequestSerializer(admin_request).data
         }, status=status.HTTP_201_CREATED)
 
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def list_password_resets(request):
-    """비밀번호 초기화 요청 목록 조회 (관리자 전용)"""
-    user = request.user
-
-    # 권한 확인
-    if not (user.is_super_admin or user.is_dept_admin):
-        return Response({
-            'error': '관리자 권한이 필요합니다.'
-        }, status=status.HTTP_403_FORBIDDEN)
-
-    # 슈퍼 관리자는 같은 회사의 모든 요청 조회
-    if user.is_super_admin:
-        resets = PasswordResetRequest.objects.filter(user__company=user.company)
-    # 부서 관리자는 자신의 부서만 조회
-    elif user.is_dept_admin:
-        resets = PasswordResetRequest.objects.filter(user__department=user.department)
-    else:
-        resets = PasswordResetRequest.objects.none()
-
-    serializer = PasswordResetRequestSerializer(resets, many=True)
-    return Response({
-        'count': resets.count(),
-        'resets': serializer.data
-    }, status=status.HTTP_200_OK)
-
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def request_password_reset(request):
-    """사용자 비밀번호 초기화 요청 생성 (일반 사용자 → 부서 관리자, 부서 관리자 → 슈퍼 관리자)"""
-    user = request.user
-
-    # 슈퍼 관리자는 요청 불가 (최상위 권한)
-    if user.is_super_admin:
-        return Response({
-            'error': '슈퍼 관리자는 비밀번호 초기화를 요청할 수 없습니다.'
-        }, status=status.HTTP_403_FORBIDDEN)
-
-    # 이미 대기 중인 요청이 있는지 확인
-    existing_request = PasswordResetRequest.objects.filter(
-        user=user,
-        status='pending'
-    ).first()
-
-    if existing_request:
-        return Response({
-            'error': '이미 처리 대기 중인 비밀번호 초기화 요청이 있습니다.'
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-    # 새로운 요청 생성
-    reset_request = PasswordResetRequest.objects.create(
-        user=user,
-        requested_by=user,
-        status='pending'
-    )
-
-    # 요청 대상 설명
-    target_admin = "부서 관리자" if user.role == 'user' else "슈퍼 관리자"
-
-    return Response({
-        'message': f'비밀번호 초기화 요청이 {target_admin}에게 전달되었습니다.',
-        'reset': PasswordResetRequestSerializer(reset_request).data
-    }, status=status.HTTP_201_CREATED)
 
 
 @api_view(['POST'])
@@ -505,9 +442,9 @@ def request_password_reset_anonymous(request):
     department_id = request.data.get('department')
 
     # 필수 필드 확인
-    if not all([username, email, company_id, department_id]):
+    if not all([username, email, company_id]):
         return Response({
-            'error': '모든 정보를 입력해주세요.'
+            'error': '사용자명, 이메일, 회사 정보를 입력해주세요.'
         }, status=status.HTTP_400_BAD_REQUEST)
 
     # 사용자 확인
@@ -515,9 +452,11 @@ def request_password_reset_anonymous(request):
         user = User.objects.get(
             username=username,
             email=email,
-            company_id=company_id,
-            department_id=department_id
+            company_id=company_id
         )
+        if department_id:
+            if str(user.department_id) != str(department_id):
+                raise User.DoesNotExist
     except User.DoesNotExist:
         return Response({
             'error': '입력하신 정보와 일치하는 사용자를 찾을 수 없습니다.'
@@ -530,8 +469,10 @@ def request_password_reset_anonymous(request):
         }, status=status.HTTP_403_FORBIDDEN)
 
     # 이미 대기 중인 요청이 있는지 확인
-    existing_request = PasswordResetRequest.objects.filter(
+    existing_request = AdminRequest.objects.filter(
         user=user,
+        target_user=user,
+        request_type='password_reset',
         status='pending'
     ).first()
 
@@ -541,10 +482,12 @@ def request_password_reset_anonymous(request):
         }, status=status.HTTP_400_BAD_REQUEST)
 
     # 새로운 요청 생성
-    reset_request = PasswordResetRequest.objects.create(
+    reset_request = AdminRequest.objects.create(
         user=user,
-        requested_by=user,
-        status='pending'
+        target_user=user,
+        request_type='password_reset',
+        status='pending',
+        comment='로그인 페이지에서 요청됨'
     )
 
     # 요청 대상 설명
@@ -846,12 +789,15 @@ def dept_admin_reset_user_password(request, user_id):
         target_user.save()
 
         # 해당 사용자의 대기 중인 비밀번호 초기화 요청을 완료 처리
-        PasswordResetRequest.objects.filter(
-            user=target_user,
+        AdminRequest.objects.filter(
+            target_user=target_user,
+            request_type='password_reset',
             status='pending'
         ).update(
-            status='completed',
-            handled_at=timezone.now()
+            status='approved',
+            handled_by=admin,
+            handled_at=timezone.now(),
+            comment=f'임시 비밀번호 발급 완료: {temp_password}'
         )
 
         return Response({
@@ -878,21 +824,13 @@ def search_history(request):
 
     if request.method == 'GET':
         # 필터 옵션
-        shared_only = request.query_params.get('shared', 'true').lower() == 'true'
         my_only = request.query_params.get('my', 'false').lower() == 'true'
 
         if my_only:
-            # 내 히스토리만
+            # 내가 생성한 히스토리만
             histories = SearchHistory.objects.filter(created_by=user)
-        elif shared_only:
-            # 같은 부서의 공유 히스토리
-            histories = SearchHistory.objects.filter(
-                company=user.company,
-                department=user.department,
-                is_shared=True
-            )
         else:
-            # 모든 히스토리 (내 것 + 부서 공유)
+            # 부서 전체 공유 히스토리 (통합 챗봇 - 모든 검색 공유)
             histories = SearchHistory.objects.filter(
                 company=user.company,
                 department=user.department

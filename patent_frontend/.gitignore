@@ -32,9 +32,19 @@ patent_analysis_db/
 pnpm-lock.yaml
 requirements.txt
 
+# 백업 파일
+*.backup
+*~
+
+# 임시 파일
+*.tmp
+*.temp
+
 # macOS
 .DS_Store
 
 # IDE
 .vscode/
 .idea/
+*.swp
+*.swo

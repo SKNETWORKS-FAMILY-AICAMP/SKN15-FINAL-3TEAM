@@ -23,6 +23,12 @@ openai==1.58.1
 # langchain==0.3.13
 # langchain-openai==0.2.14
 
+# KoSBERT & Transformers
+torch==2.5.1
+transformers==4.46.3
+sentence-transformers==3.3.1
+scikit-learn==1.6.0
+
 # Vector Search (선택)
 # pgvector==0.2.4
 # pinecone-client==3.0.0
