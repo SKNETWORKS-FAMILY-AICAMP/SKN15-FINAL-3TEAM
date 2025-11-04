@@ -14,7 +14,39 @@ interface Patent {
   applicationNumber: string
   applicationDate: string
   summary: string
+  applicant?: string
+  registrationNumber?: string
+  registrationDate?: string
+  ipcCode?: string
+  cpcCode?: string
+  claims?: string
+  pdfLink?: string  // 논문 PDF 링크
   highlight?: boolean
+}
+
+interface Paper {
+  id: number
+  title_kr: string
+  title_en?: string
+  authors: string
+  abstract_kr: string
+  abstract_en?: string
+  abstract_page_link?: string
+  pdf_link?: string
+}
+
+interface RejectReason {
+  id: number
+  doc_id: string
+  send_number: string
+  send_date: string
+  applicant: string
+  agent: string
+  application_number: string
+  invention_name: string
+  examination_office: string
+  examiner: string
+  processed_text: string
 }
 
 const SAMPLE_PATENTS: Patent[] = [
@@ -92,9 +124,11 @@ function highlightText(text: string, keyword: string) {
 }
 
 export default function SearchPage() {
-  const [searchQuery, setSearchQuery] = useState("인공지능")
+  const [searchType, setSearchType] = useState<"patent" | "paper">("patent")
+  const [searchQuery, setSearchQuery] = useState("")
   const [searchInTitle, setSearchInTitle] = useState(true)
-  const [searchInSummary, setSearchInSummary] = useState(true)
+  const [searchInSummary, setSearchInSummary] = useState(false)
+  const [searchInClaims, setSearchInClaims] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [ipcCode, setIpcCode] = useState("")
   const [applicationStartDate, setApplicationStartDate] = useState("")
@@ -105,13 +139,26 @@ export default function SearchPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES)
   const [inputMessage, setInputMessage] = useState("")
-  const [searchResults, setSearchResults] = useState<Patent[]>(SAMPLE_PATENTS)
+  const [searchResults, setSearchResults] = useState<Patent[]>([])
+  const [totalCount, setTotalCount] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
   const [isSearching, setIsSearching] = useState(false)
-  const [hasSearched, setHasSearched] = useState(true)
+  const [hasSearched, setHasSearched] = useState(false)
   const [isTyping, setIsTyping] = useState(false)
   const [activeTab, setActiveTab] = useState<"search" | "chat">("search")
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [conversationId, setConversationId] = useState<string | null>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [selectedPatentId, setSelectedPatentId] = useState<number | null>(null)
+  const [patentDetails, setPatentDetails] = useState<Patent | null>(null)
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false)
+  const [selectedPaperId, setSelectedPaperId] = useState<number | null>(null)
+  const [paperDetails, setPaperDetails] = useState<Paper | null>(null)
+  const [isPaperModalOpen, setIsPaperModalOpen] = useState(false)
+  const [isLoadingPaperDetails, setIsLoadingPaperDetails] = useState(false)
+  const [rejectReasons, setRejectReasons] = useState<RejectReason[]>([])
+  const [isRejectModalOpen, setIsRejectModalOpen] = useState(false)
+  const [isLoadingRejectReasons, setIsLoadingRejectReasons] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -402,15 +449,300 @@ export default function SearchPage() {
     }, 2000)
   }
 
-  const handleSearch = () => {
+  // 전체 특허 목록 또는 검색 결과 가져오기
+  const fetchPatents = async (keyword: string = '', page: number = 1) => {
     setIsSearching(true)
-    setHasSearched(false)
 
-    setTimeout(() => {
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000"
+    const token = localStorage.getItem("access_token")
+
+    try {
+      let response;
+      const endpoint = searchType === "paper" ? "/api/papers" : "/api/patents"
+
+      if (keyword.trim()) {
+        // 키워드 검색
+        let searchFields = []
+
+        if (searchType === "paper") {
+          // 논문 검색 필드
+          if (searchInTitle) searchFields.push('title_kr')
+          if (searchInSummary) searchFields.push('abstract_kr')
+        } else {
+          // 특허 검색 필드
+          if (searchInTitle) searchFields.push('title')
+          if (searchInSummary) searchFields.push('abstract')
+          if (searchInClaims) searchFields.push('claims')
+        }
+
+        const requestBody: any = {
+          keyword: keyword,
+          search_fields: searchFields.length > 0 ? searchFields : (searchType === "paper" ? ['title_kr', 'abstract_kr'] : ['title', 'abstract']),
+          page: page,
+          page_size: 10
+        }
+
+        // 특허 전용 고급 필터
+        if (searchType === "patent") {
+          if (ipcCode) requestBody.ipc_code = ipcCode
+          if (applicationStartDate) requestBody.application_start_date = applicationStartDate
+          if (applicationEndDate) requestBody.application_end_date = applicationEndDate
+          if (publicationStartDate) requestBody.registration_start_date = publicationStartDate
+          if (publicationEndDate) requestBody.registration_end_date = publicationEndDate
+        }
+
+        response = await fetch(`${API_BASE_URL}${endpoint}/search/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token && { 'Authorization': `Bearer ${token}` })
+          },
+          body: JSON.stringify(requestBody)
+        })
+      } else {
+        // 전체 목록 조회
+        response = await fetch(`${API_BASE_URL}${endpoint}/?page=${page}&page_size=10`, {
+          headers: {
+            ...(token && { 'Authorization': `Bearer ${token}` })
+          }
+        })
+      }
+
+      if (!response.ok) {
+        throw new Error('데이터 조회 실패')
+      }
+
+      const data = await response.json()
+
+      // 백엔드 응답을 프론트엔드 형식으로 변환
+      let patents: Patent[]
+      let total: number
+      let pages: number
+
+      if (searchType === "paper") {
+        // 논문 데이터 변환
+        if (keyword.trim()) {
+          patents = data.results.map((item: any) => ({
+            id: item.id,
+            title: item.title_kr,
+            applicationNumber: item.authors || '',  // 저자를 applicationNumber에 표시
+            applicationDate: '',  // 논문은 날짜 없음
+            summary: item.abstract_kr || '',
+            pdfLink: item.pdf_link || ''  // PDF 링크 추가
+          }))
+          total = data.total_count || 0
+          pages = data.total_pages || 0
+        } else {
+          patents = data.results.map((item: any) => ({
+            id: item.id,
+            title: item.title_kr,
+            applicationNumber: item.authors || '',
+            applicationDate: '',
+            summary: item.abstract_kr || '',
+            pdfLink: item.pdf_link || ''
+          }))
+          total = data.count || 0
+          pages = Math.ceil(total / 10)
+        }
+      } else {
+        // 특허 데이터 변환
+        if (keyword.trim()) {
+          // 검색 API 응답
+          patents = data.results.map((item: any) => ({
+            id: item.id,
+            title: item.title,
+            applicationNumber: item.application_number,
+            applicationDate: item.application_date || '',
+            summary: item.abstract || ''
+          }))
+          total = data.total_count || 0
+          pages = data.total_pages || 0
+        } else {
+          // 목록 API 응답 (DRF 페이지네이션)
+          patents = data.results.map((item: any) => ({
+            id: item.id,
+            title: item.title,
+            applicationNumber: item.application_number,
+            applicationDate: item.application_date || '',
+            summary: item.abstract || ''
+          }))
+          total = data.count || 0
+          pages = Math.ceil(total / 10)
+        }
+      }
+
+      setSearchResults(patents)
+      setTotalCount(total)
+      setTotalPages(pages)
       setIsSearching(false)
       setHasSearched(true)
-      setSearchResults(SAMPLE_PATENTS)
-    }, 1000)
+    } catch (error) {
+      console.error('데이터 조회 오류:', error)
+      setIsSearching(false)
+      setHasSearched(true)
+      setSearchResults([])
+      setTotalCount(0)
+      setTotalPages(0)
+    }
+  }
+
+  const handleSearch = () => {
+    setCurrentPage(1)
+    fetchPatents(searchQuery, 1)
+  }
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+    fetchPatents(searchQuery, page)
+  }
+
+  // 초기 로드 시 및 searchType 변경 시 데이터 가져오기
+  useEffect(() => {
+    setCurrentPage(1)
+    if (hasSearched && searchQuery) {
+      // 검색어가 있으면 검색 실행
+      fetchPatents(searchQuery, 1)
+    } else {
+      // 검색어가 없으면 전체 목록 조회
+      fetchPatents('', 1)
+    }
+  }, [searchType])
+
+  // 특허 상세 정보 가져오기
+  const fetchPatentDetails = async (patentId: number) => {
+    setIsLoadingDetails(true)
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000"
+    const token = localStorage.getItem("access_token")
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/patents/${patentId}/`, {
+        headers: {
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error('특허 상세 정보 조회 실패')
+      }
+
+      const data = await response.json()
+
+      const patentDetail: Patent = {
+        id: data.id,
+        title: data.title,
+        applicationNumber: data.application_number,
+        applicationDate: data.application_date || '',
+        summary: data.abstract || '',
+        applicant: data.applicant || '',
+        registrationNumber: data.registration_number || '',
+        registrationDate: data.registration_date || '',
+        ipcCode: data.ipc_code || '',
+        cpcCode: data.cpc_code || '',
+        claims: data.claims || ''
+      }
+
+      setPatentDetails(patentDetail)
+      setIsLoadingDetails(false)
+    } catch (error) {
+      console.error('특허 상세 정보 조회 오류:', error)
+      setIsLoadingDetails(false)
+      alert('특허 상세 정보를 불러오는데 실패했습니다.')
+    }
+  }
+
+  // 상세보기 버튼 클릭
+  const handleViewDetails = (patentId: number) => {
+    setSelectedPatentId(patentId)
+    setIsModalOpen(true)
+    fetchPatentDetails(patentId)
+  }
+
+  // 모달 닫기
+  const handleCloseModal = () => {
+    setIsModalOpen(false)
+    setSelectedPatentId(null)
+    setPatentDetails(null)
+  }
+
+  // 논문 상세 정보 가져오기
+  const fetchPaperDetails = async (paperId: number) => {
+    setIsLoadingPaperDetails(true)
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000"
+    const token = localStorage.getItem("access_token")
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/papers/${paperId}/`, {
+        headers: {
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error('논문 상세 정보 조회 실패')
+      }
+
+      const data = await response.json()
+      setPaperDetails(data)
+      setIsLoadingPaperDetails(false)
+    } catch (error) {
+      console.error('논문 상세 정보 조회 오류:', error)
+      setIsLoadingPaperDetails(false)
+      alert('논문 상세 정보를 불러오는데 실패했습니다.')
+    }
+  }
+
+  // 논문 상세보기 버튼 클릭
+  const handleViewPaperDetails = (paperId: number) => {
+    setSelectedPaperId(paperId)
+    setIsPaperModalOpen(true)
+    fetchPaperDetails(paperId)
+  }
+
+  // 논문 모달 닫기
+  const handleClosePaperModal = () => {
+    setIsPaperModalOpen(false)
+    setSelectedPaperId(null)
+    setPaperDetails(null)
+  }
+
+  // 거절 사유 조회
+  const fetchRejectReasons = async (applicationNumber: string) => {
+    setIsLoadingRejectReasons(true)
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000"
+    const token = localStorage.getItem("access_token")
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/patents/reject-reasons/${applicationNumber}/`, {
+        headers: {
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error('거절 사유 조회 실패')
+      }
+
+      const data = await response.json()
+
+      if (data.has_reject_reasons && data.results) {
+        setRejectReasons(data.results)
+        setIsRejectModalOpen(true)
+      } else {
+        alert('해당 특허의 거절 사유가 없습니다.')
+      }
+
+      setIsLoadingRejectReasons(false)
+    } catch (error) {
+      console.error('거절 사유 조회 오류:', error)
+      setIsLoadingRejectReasons(false)
+      alert('거절 사유를 불러오는데 실패했습니다.')
+    }
+  }
+
+  // 거절 사유 모달 닫기
+  const handleCloseRejectModal = () => {
+    setIsRejectModalOpen(false)
+    setRejectReasons([])
   }
 
 
@@ -465,10 +797,34 @@ export default function SearchPage() {
             overflowY: 'auto'
           }}>
             <div className="p-6">
+              {/* Search Type Tabs */}
+              <div className="flex gap-2 mb-4">
+                <button
+                  onClick={() => setSearchType("patent")}
+                  className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
+                    searchType === "patent"
+                      ? "bg-[#3B82F6] text-white"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  }`}
+                >
+                  특허 검색
+                </button>
+                <button
+                  onClick={() => setSearchType("paper")}
+                  className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
+                    searchType === "paper"
+                      ? "bg-[#3B82F6] text-white"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  }`}
+                >
+                  논문 검색
+                </button>
+              </div>
+
               <div className="flex gap-2">
                 <Input
                   type="text"
-                  placeholder="특허 키워드 입력 (예: 인공지능, 반도체)"
+                  placeholder={searchType === "patent" ? "특허 키워드 입력 (예: 인공지능, 반도체)" : "논문 키워드 입력 (예: machine learning, AI)"}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -483,7 +839,7 @@ export default function SearchPage() {
                 </Button>
               </div>
 
-              <div className="flex gap-4 mt-3">
+              <div className="flex flex-wrap gap-4 mt-3">
                 <div className="flex items-center gap-2">
                   <Checkbox
                     id="title"
@@ -501,19 +857,32 @@ export default function SearchPage() {
                     onCheckedChange={(checked) => setSearchInSummary(checked as boolean)}
                   />
                   <label htmlFor="summary" className="text-sm cursor-pointer">
-                    요약에서 검색
+                    {searchType === "patent" ? "요약에서 검색" : "초록에서 검색"}
                   </label>
                 </div>
+                {searchType === "patent" && (
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="claims"
+                      checked={searchInClaims}
+                      onCheckedChange={(checked) => setSearchInClaims(checked as boolean)}
+                    />
+                    <label htmlFor="claims" className="text-sm cursor-pointer">
+                      청구항에서 검색
+                    </label>
+                  </div>
+                )}
               </div>
 
-              <div className="mt-4">
-                <button
-                  onClick={() => setShowAdvanced(!showAdvanced)}
-                  className="flex items-center justify-between w-full text-sm font-medium text-gray-700 hover:text-gray-900"
-                >
-                  <span>고급 필터</span>
-                  {showAdvanced ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                </button>
+              {searchType === "patent" && (
+                <div className="mt-4">
+                  <button
+                    onClick={() => setShowAdvanced(!showAdvanced)}
+                    className="flex items-center justify-between w-full text-sm font-medium text-gray-700 hover:text-gray-900"
+                  >
+                    <span>고급 필터</span>
+                    {showAdvanced ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  </button>
 
                 {showAdvanced && (
                   <div className="mt-3 space-y-3">
@@ -579,7 +948,8 @@ export default function SearchPage() {
                     </div>
                   </div>
                 )}
-              </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -590,7 +960,9 @@ export default function SearchPage() {
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center text-gray-500">
                     <Search className="h-12 w-12 mx-auto mb-3 text-gray-400" />
-                    <p className="text-sm">키워드를 입력하여 특허를 검색하세요</p>
+                    <p className="text-sm">
+                      키워드를 입력하여 {searchType === "patent" ? "특허" : "논문"}를 검색하세요
+                    </p>
                   </div>
                 </div>
               )}
@@ -615,7 +987,9 @@ export default function SearchPage() {
                 backgroundColor: 'rgba(249, 250, 251, 0.3)',
                 borderBottom: '1px solid rgba(229, 231, 235, 0.2)'
               }}>
-                <p className="text-sm text-gray-600">총 143건 검색됨</p>
+                <p className="text-sm text-gray-600">
+                  {searchType === "patent" ? "특허" : "논문"} 총 {totalCount}건 검색됨
+                </p>
               </div>
 
               <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -626,31 +1000,45 @@ export default function SearchPage() {
                       patent.highlight ? "bg-yellow-100 animate-pulse" : ""
                     }`}
                   >
-                    <h3 className="text-base font-semibold mb-2">{highlightText(patent.title, searchQuery)}</h3>
+                    <div
+                      onClick={searchType === "patent" ? () => handleViewDetails(patent.id) : () => handleViewPaperDetails(patent.id)}
+                      className="cursor-pointer"
+                    >
+                      <h3 className="text-base font-semibold mb-2">{highlightText(patent.title, searchQuery)}</h3>
 
-                    <div className="text-xs text-gray-500 mb-2">
-                      <span>출원번호: {patent.applicationNumber}</span>
-                      <span className="mx-2">•</span>
-                      <span>출원일: {patent.applicationDate}</span>
+                      <div className="text-xs text-gray-500 mb-2">
+                        {searchType === "patent" ? (
+                          <>
+                            <span>출원번호: {patent.applicationNumber}</span>
+                            {patent.applicationDate && (
+                              <>
+                                <span className="mx-2">•</span>
+                                <span>출원일: {patent.applicationDate}</span>
+                              </>
+                            )}
+                          </>
+                        ) : (
+                          <span>저자: {patent.applicationNumber}</span>
+                        )}
+                      </div>
+
+                      <p className="text-sm text-gray-700 line-clamp-3">
+                        {highlightText(patent.summary, searchQuery)}
+                      </p>
                     </div>
 
-                    <p className="text-sm text-gray-700 line-clamp-3 mb-3">
-                      {highlightText(patent.summary, searchQuery)}
-                    </p>
-
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleSendToChat(patent)}
-                        className="flex items-center gap-1 text-sm text-[#3B82F6] hover:text-[#2563EB]"
-                      >
-                        <Send className="h-4 w-4" />
-                        챗봇에 전송
-                      </button>
-                      <button className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900">
-                        <FileText className="h-4 w-4" />
-                        상세보기
-                      </button>
-                    </div>
+                    {searchType === "paper" && patent.pdfLink && (
+                      <div className="mt-3">
+                        <Button
+                          onClick={() => window.open(patent.pdfLink, '_blank')}
+                          className="bg-[#3B82F6] hover:bg-[#2563EB] text-white text-sm"
+                          size="sm"
+                        >
+                          <FileText className="h-4 w-4 mr-2" />
+                          PDF 보기
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -668,26 +1056,45 @@ export default function SearchPage() {
                   variant="outline"
                   size="sm"
                   disabled={currentPage === 1}
-                  onClick={() => setCurrentPage(currentPage - 1)}
+                  onClick={() => handlePageChange(currentPage - 1)}
                 >
                   이전
                 </Button>
-                {[1, 2, 3, 4, 5].map((page) => (
-                  <Button
-                    key={page}
-                    variant={currentPage === page ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setCurrentPage(page)}
-                    className={currentPage === page ? "bg-[#3B82F6]" : ""}
-                  >
-                    {page}
-                  </Button>
-                ))}
-                <span className="text-sm text-gray-500">...</span>
-                <Button variant="outline" size="sm">
-                  10
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => setCurrentPage(currentPage + 1)}>
+
+                {/* 페이지 번호 버튼 */}
+                {(() => {
+                  const maxPagesToShow = 5
+                  const pages = []
+                  let startPage = Math.max(1, currentPage - 2)
+                  let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1)
+
+                  if (endPage - startPage < maxPagesToShow - 1) {
+                    startPage = Math.max(1, endPage - maxPagesToShow + 1)
+                  }
+
+                  for (let i = startPage; i <= endPage; i++) {
+                    pages.push(
+                      <Button
+                        key={i}
+                        variant={currentPage === i ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handlePageChange(i)}
+                        className={currentPage === i ? "bg-[#3B82F6]" : ""}
+                      >
+                        {i}
+                      </Button>
+                    )
+                  }
+
+                  return pages
+                })()}
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage === totalPages}
+                  onClick={() => handlePageChange(currentPage + 1)}
+                >
                   다음
                 </Button>
               </div>
@@ -852,6 +1259,362 @@ export default function SearchPage() {
           </div>
         </div>
       </div>
+
+      {/* Patent Detail Modal */}
+      {isModalOpen && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={handleCloseModal}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900">특허 상세 정보</h2>
+              <button
+                onClick={handleCloseModal}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="px-6 py-4">
+              {isLoadingDetails ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                  <span className="ml-3 text-gray-600">불러오는 중...</span>
+                </div>
+              ) : patentDetails ? (
+                <div className="space-y-6">
+                  {/* 발명의 명칭 */}
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">발명의 명칭</h3>
+                    <p className="text-gray-800">{patentDetails.title}</p>
+                  </div>
+
+                  {/* 출원 정보 */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-700 mb-1">출원번호</h3>
+                      <p className="text-gray-800">{patentDetails.applicationNumber}</p>
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-700 mb-1">출원일</h3>
+                      <p className="text-gray-800">{patentDetails.applicationDate || '-'}</p>
+                    </div>
+                    {patentDetails.applicant && (
+                      <div>
+                        <h3 className="text-sm font-semibold text-gray-700 mb-1">출원인</h3>
+                        <p className="text-gray-800">{patentDetails.applicant}</p>
+                      </div>
+                    )}
+                    {patentDetails.registrationNumber && (
+                      <div>
+                        <h3 className="text-sm font-semibold text-gray-700 mb-1">등록번호</h3>
+                        <p className="text-gray-800">{patentDetails.registrationNumber}</p>
+                      </div>
+                    )}
+                    {patentDetails.registrationDate && (
+                      <div>
+                        <h3 className="text-sm font-semibold text-gray-700 mb-1">등록일</h3>
+                        <p className="text-gray-800">{patentDetails.registrationDate}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 분류 코드 */}
+                  {(patentDetails.ipcCode || patentDetails.cpcCode) && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {patentDetails.ipcCode && (
+                        <div>
+                          <h3 className="text-sm font-semibold text-gray-700 mb-1">IPC 분류</h3>
+                          <p className="text-gray-800 text-sm">{patentDetails.ipcCode}</p>
+                        </div>
+                      )}
+                      {patentDetails.cpcCode && (
+                        <div>
+                          <h3 className="text-sm font-semibold text-gray-700 mb-1">CPC 분류</h3>
+                          <p className="text-gray-800 text-sm">{patentDetails.cpcCode}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 요약 */}
+                  {patentDetails.summary && (
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">요약</h3>
+                      <p className="text-gray-800 whitespace-pre-line leading-relaxed">
+                        {patentDetails.summary}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* 청구항 */}
+                  {patentDetails.claims && (
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">청구항</h3>
+                      <div className="text-gray-800 leading-relaxed space-y-4">
+                        {patentDetails.claims.split(/(?=\[청구항\s*\d+\]|\【청구항\s*\d+\】|청구항\s*\d+[\.\:)])/g).map((claim, index) => {
+                          const trimmedClaim = claim.trim()
+                          if (!trimmedClaim) return null
+
+                          // 청구항 번호와 내용 분리
+                          const claimMatch = trimmedClaim.match(/^(\[청구항\s*\d+\]|\【청구항\s*\d+\】|청구항\s*\d+[\.\:)])(.+)$/s)
+
+                          if (claimMatch) {
+                            const [, claimNumber, claimContent] = claimMatch
+                            return (
+                              <div key={index} className="border-l-2 border-blue-200 pl-4 py-2">
+                                <div className="font-semibold text-blue-700 mb-2">{claimNumber}</div>
+                                <div className="whitespace-pre-line">{claimContent.trim()}</div>
+                              </div>
+                            )
+                          }
+
+                          return (
+                            <div key={index} className="whitespace-pre-line">
+                              {trimmedClaim}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center justify-center py-12">
+                  <p className="text-gray-600">상세 정보를 불러올 수 없습니다.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-end gap-3">
+              <Button
+                variant="outline"
+                onClick={handleCloseModal}
+              >
+                닫기
+              </Button>
+              {patentDetails && (
+                <Button
+                  onClick={() => fetchRejectReasons(patentDetails.applicationNumber)}
+                  disabled={isLoadingRejectReasons}
+                  className="bg-[#3B82F6] hover:bg-[#2563EB]"
+                >
+                  {isLoadingRejectReasons ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <FileText className="h-4 w-4 mr-2" />
+                  )}
+                  거절 내역 확인
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Paper Detail Modal */}
+      {isPaperModalOpen && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={handleClosePaperModal}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900">논문 상세 정보</h2>
+              <button
+                onClick={handleClosePaperModal}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="px-6 py-4">
+              {isLoadingPaperDetails ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                  <span className="ml-3 text-gray-600">불러오는 중...</span>
+                </div>
+              ) : paperDetails ? (
+                <div className="space-y-6">
+                  {/* 논문 제목 */}
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">논문 제목</h3>
+                    <p className="text-gray-800 text-lg">{paperDetails.title_kr}</p>
+                    {paperDetails.title_en && (
+                      <p className="text-gray-600 text-sm mt-2 italic">{paperDetails.title_en}</p>
+                    )}
+                  </div>
+
+                  {/* 저자 정보 */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-1">저자</h3>
+                    <p className="text-gray-800">{paperDetails.authors}</p>
+                  </div>
+
+                  {/* 초록 (한글) */}
+                  {paperDetails.abstract_kr && (
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">초록</h3>
+                      <p className="text-gray-800 whitespace-pre-line leading-relaxed">
+                        {paperDetails.abstract_kr}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* 초록 (영문) */}
+                  {paperDetails.abstract_en && (
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">Abstract (영문)</h3>
+                      <p className="text-gray-700 whitespace-pre-line leading-relaxed text-sm">
+                        {paperDetails.abstract_en}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center justify-center py-12">
+                  <p className="text-gray-600">상세 정보를 불러올 수 없습니다.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-end gap-3">
+              <Button
+                variant="outline"
+                onClick={handleClosePaperModal}
+              >
+                닫기
+              </Button>
+              {paperDetails && paperDetails.pdf_link && (
+                <Button
+                  onClick={() => window.open(paperDetails.pdf_link, '_blank')}
+                  className="bg-[#3B82F6] hover:bg-[#2563EB]"
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  PDF 보기
+                </Button>
+              )}
+              {paperDetails && paperDetails.abstract_page_link && (
+                <Button
+                  onClick={() => window.open(paperDetails.abstract_page_link, '_blank')}
+                  className="bg-[#10B981] hover:bg-[#059669]"
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  논문 페이지 보기
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject Reason Modal */}
+      {isRejectModalOpen && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={handleCloseRejectModal}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900">거절 내역</h2>
+              <button
+                onClick={handleCloseRejectModal}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="px-6 py-4">
+              {rejectReasons.length > 0 ? (
+                <div className="space-y-6">
+                  {rejectReasons.map((reason, index) => (
+                    <div key={reason.id} className="border-b border-gray-200 pb-6 last:border-b-0">
+                      {/* 거절 문서 정보 */}
+                      <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <span className="font-semibold text-gray-700">발송일자:</span>
+                            <span className="ml-2 text-gray-600">{reason.send_date}</span>
+                          </div>
+                          <div>
+                            <span className="font-semibold text-gray-700">발송번호:</span>
+                            <span className="ml-2 text-gray-600">{reason.send_number}</span>
+                          </div>
+                          <div>
+                            <span className="font-semibold text-gray-700">출원인:</span>
+                            <span className="ml-2 text-gray-600">{reason.applicant}</span>
+                          </div>
+                          {reason.agent && (
+                            <div>
+                              <span className="font-semibold text-gray-700">대리인:</span>
+                              <span className="ml-2 text-gray-600">{reason.agent}</span>
+                            </div>
+                          )}
+                          <div>
+                            <span className="font-semibold text-gray-700">심사기관:</span>
+                            <span className="ml-2 text-gray-600">{reason.examination_office}</span>
+                          </div>
+                          <div>
+                            <span className="font-semibold text-gray-700">심사관:</span>
+                            <span className="ml-2 text-gray-600">{reason.examiner}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 거절 사유 내용 */}
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                          거절 사유 {rejectReasons.length > 1 ? `${index + 1}` : ''}
+                        </h3>
+                        <div className="bg-white border border-gray-200 rounded-lg p-4">
+                          <p className="text-gray-800 whitespace-pre-line leading-relaxed">
+                            {reason.processed_text}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex items-center justify-center py-12">
+                  <p className="text-gray-600">거절 사유가 없습니다.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-end">
+              <Button
+                variant="outline"
+                onClick={handleCloseRejectModal}
+              >
+                닫기
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </MainLayout>
   )
 }
