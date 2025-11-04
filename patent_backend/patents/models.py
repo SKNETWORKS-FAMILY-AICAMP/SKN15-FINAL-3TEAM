@@ -208,3 +208,39 @@ class RejectDocument(models.Model):
 
     def __str__(self):
         return f"{self.application_number} - {self.invention_name[:50] if self.invention_name else 'N/A'}"
+
+
+class OpinionDocument(models.Model):
+    """의견 제출 통지서 모델"""
+
+    application_number = models.CharField(
+        max_length=50,
+        verbose_name='출원번호',
+        db_index=True
+    )
+    full_text = models.TextField(
+        verbose_name='전체_내용',
+        blank=True,
+        null=True
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='데이터 생성일'
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name='데이터 수정일'
+    )
+
+    class Meta:
+        db_table = 'opinion_documents'
+        verbose_name = '의견 제출 통지서'
+        verbose_name_plural = '의견 제출 통지서 목록'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['application_number']),
+        ]
+
+    def __str__(self):
+        return f"{self.application_number} - 의견 제출 통지서"

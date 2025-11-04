@@ -8,12 +8,13 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.contrib.postgres.search import SearchQuery, SearchRank, SearchVector
 from django.db.models import Q, F
-from .models import Patent, RejectDocument
+from .models import Patent, RejectDocument, OpinionDocument
 from .serializers import (
     PatentSerializer,
     PatentListSerializer,
     PatentSearchSerializer,
-    RejectDocumentSerializer
+    RejectDocumentSerializer,
+    OpinionDocumentSerializer
 )
 import logging
 
@@ -228,6 +229,55 @@ class PatentViewSet(viewsets.ReadOnlyModelViewSet):
                 {
                     'success': False,
                     'error': '거절 사유 조회 중 오류가 발생했습니다.',
+                    'detail': str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['get'], url_path='opinion-documents/(?P<application_number>[^/.]+)')
+    def opinion_documents(self, request, application_number=None):
+        """
+        특허 출원번호로 의견 제출 통지서 조회
+
+        GET /api/patents/opinion-documents/1020190012345/
+        """
+        if not application_number:
+            return Response(
+                {'error': '출원번호가 필요합니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # 출원번호로 의견 제출 통지서 조회
+            opinion_docs = OpinionDocument.objects.filter(
+                application_number=application_number
+            ).order_by('-created_at')
+
+            if not opinion_docs.exists():
+                return Response({
+                    'success': True,
+                    'application_number': application_number,
+                    'has_opinion_documents': False,
+                    'count': 0,
+                    'results': []
+                })
+
+            serializer = OpinionDocumentSerializer(opinion_docs, many=True)
+
+            return Response({
+                'success': True,
+                'application_number': application_number,
+                'has_opinion_documents': True,
+                'count': opinion_docs.count(),
+                'results': serializer.data
+            })
+
+        except Exception as e:
+            logger.error(f"의견 제출 통지서 조회 오류: {str(e)}")
+            return Response(
+                {
+                    'success': False,
+                    'error': '의견 제출 통지서 조회 중 오류가 발생했습니다.',
                     'detail': str(e)
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

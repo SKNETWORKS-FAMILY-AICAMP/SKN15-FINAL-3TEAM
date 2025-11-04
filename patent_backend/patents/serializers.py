@@ -2,7 +2,7 @@
 특허 데이터 Serializer
 """
 from rest_framework import serializers
-from .models import Patent, RejectDocument
+from .models import Patent, RejectDocument, OpinionDocument
 
 
 class PatentSerializer(serializers.ModelSerializer):
@@ -119,6 +119,20 @@ class RejectDocumentSerializer(serializers.ModelSerializer):
             'examiner',
             'tables_raw',
             'processed_text',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'created_at']
+
+
+class OpinionDocumentSerializer(serializers.ModelSerializer):
+    """의견 제출 통지서 Serializer"""
+
+    class Meta:
+        model = OpinionDocument
+        fields = [
+            'id',
+            'application_number',
+            'full_text',
             'created_at',
         ]
         read_only_fields = ['id', 'created_at']

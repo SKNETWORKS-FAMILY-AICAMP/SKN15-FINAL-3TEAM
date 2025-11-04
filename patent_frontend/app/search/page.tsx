@@ -49,6 +49,13 @@ interface RejectReason {
   processed_text: string
 }
 
+interface OpinionDocument {
+  id: number
+  application_number: string
+  full_text: string
+  created_at: string
+}
+
 const SAMPLE_PATENTS: Patent[] = [
   {
     id: 1,
@@ -159,6 +166,9 @@ export default function SearchPage() {
   const [rejectReasons, setRejectReasons] = useState<RejectReason[]>([])
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false)
   const [isLoadingRejectReasons, setIsLoadingRejectReasons] = useState(false)
+  const [rejectDocumentTab, setRejectDocumentTab] = useState<"specification" | "opinion">("specification")
+  const [opinionDocuments, setOpinionDocuments] = useState<OpinionDocument[]>([])
+  const [isLoadingOpinionDocuments, setIsLoadingOpinionDocuments] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -743,6 +753,39 @@ export default function SearchPage() {
   const handleCloseRejectModal = () => {
     setIsRejectModalOpen(false)
     setRejectReasons([])
+  }
+
+  // 의견 제출 통지서 조회
+  const fetchOpinionDocuments = async (applicationNumber: string) => {
+    setIsLoadingOpinionDocuments(true)
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000"
+    const token = localStorage.getItem("access_token")
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/patents/opinion-documents/${applicationNumber}/`, {
+        headers: {
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error('의견 제출 통지서 조회 실패')
+      }
+
+      const data = await response.json()
+
+      if (data.has_opinion_documents && data.results) {
+        setOpinionDocuments(data.results)
+      } else {
+        setOpinionDocuments([])
+      }
+
+      setIsLoadingOpinionDocuments(false)
+    } catch (error) {
+      console.error('의견 제출 통지서 조회 오류:', error)
+      setIsLoadingOpinionDocuments(false)
+      setOpinionDocuments([])
+    }
   }
 
 
@@ -1403,11 +1446,16 @@ export default function SearchPage() {
               </Button>
               {patentDetails && (
                 <Button
-                  onClick={() => fetchRejectReasons(patentDetails.applicationNumber)}
-                  disabled={isLoadingRejectReasons}
+                  onClick={async () => {
+                    await Promise.all([
+                      fetchRejectReasons(patentDetails.applicationNumber),
+                      fetchOpinionDocuments(patentDetails.applicationNumber)
+                    ])
+                  }}
+                  disabled={isLoadingRejectReasons || isLoadingOpinionDocuments}
                   className="bg-[#3B82F6] hover:bg-[#2563EB]"
                 >
-                  {isLoadingRejectReasons ? (
+                  {(isLoadingRejectReasons || isLoadingOpinionDocuments) ? (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   ) : (
                     <FileText className="h-4 w-4 mr-2" />
@@ -1530,11 +1578,11 @@ export default function SearchPage() {
           onClick={handleCloseRejectModal}
         >
           <div
-            className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+            className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+            <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
               <h2 className="text-xl font-bold text-gray-900">거절 내역</h2>
               <button
                 onClick={handleCloseRejectModal}
@@ -1544,67 +1592,125 @@ export default function SearchPage() {
               </button>
             </div>
 
-            {/* Modal Content */}
-            <div className="px-6 py-4">
-              {rejectReasons.length > 0 ? (
-                <div className="space-y-6">
-                  {rejectReasons.map((reason, index) => (
-                    <div key={reason.id} className="border-b border-gray-200 pb-6 last:border-b-0">
-                      {/* 거절 문서 정보 */}
-                      <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                          <div>
-                            <span className="font-semibold text-gray-700">발송일자:</span>
-                            <span className="ml-2 text-gray-600">{reason.send_date}</span>
-                          </div>
-                          <div>
-                            <span className="font-semibold text-gray-700">발송번호:</span>
-                            <span className="ml-2 text-gray-600">{reason.send_number}</span>
-                          </div>
-                          <div>
-                            <span className="font-semibold text-gray-700">출원인:</span>
-                            <span className="ml-2 text-gray-600">{reason.applicant}</span>
-                          </div>
-                          {reason.agent && (
-                            <div>
-                              <span className="font-semibold text-gray-700">대리인:</span>
-                              <span className="ml-2 text-gray-600">{reason.agent}</span>
-                            </div>
-                          )}
-                          <div>
-                            <span className="font-semibold text-gray-700">심사기관:</span>
-                            <span className="ml-2 text-gray-600">{reason.examination_office}</span>
-                          </div>
-                          <div>
-                            <span className="font-semibold text-gray-700">심사관:</span>
-                            <span className="ml-2 text-gray-600">{reason.examiner}</span>
-                          </div>
-                        </div>
-                      </div>
+            {/* Tabs */}
+            <div className="border-b border-gray-200">
+              <div className="flex">
+                <button
+                  onClick={() => setRejectDocumentTab("specification")}
+                  className={`flex-1 px-6 py-3 text-sm font-medium transition-colors ${
+                    rejectDocumentTab === "specification"
+                      ? "text-[#3B82F6] border-b-2 border-[#3B82F6] bg-blue-50"
+                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                  }`}
+                >
+                  특허 거절 결정서
+                </button>
+                <button
+                  onClick={() => setRejectDocumentTab("opinion")}
+                  className={`flex-1 px-6 py-3 text-sm font-medium transition-colors ${
+                    rejectDocumentTab === "opinion"
+                      ? "text-[#3B82F6] border-b-2 border-[#3B82F6] bg-blue-50"
+                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                  }`}
+                >
+                  의견 제출 통지서
+                </button>
+              </div>
+            </div>
 
-                      {/* 거절 사유 내용 */}
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                          거절 사유 {rejectReasons.length > 1 ? `${index + 1}` : ''}
-                        </h3>
-                        <div className="bg-white border border-gray-200 rounded-lg p-4">
-                          <p className="text-gray-800 whitespace-pre-line leading-relaxed">
-                            {reason.processed_text}
-                          </p>
+            {/* Modal Content */}
+            <div className="px-6 py-4 overflow-y-auto flex-1">
+              {rejectDocumentTab === "specification" ? (
+                // 특허 거절 결정서 탭
+                rejectReasons.length > 0 ? (
+                  <div className="space-y-6">
+                    {rejectReasons.map((reason, index) => (
+                      <div key={reason.id} className="border-b border-gray-200 pb-6 last:border-b-0">
+                        {/* 거절 문서 정보 */}
+                        <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                            <div>
+                              <span className="font-semibold text-gray-700">발송일자:</span>
+                              <span className="ml-2 text-gray-600">{reason.send_date}</span>
+                            </div>
+                            <div>
+                              <span className="font-semibold text-gray-700">발송번호:</span>
+                              <span className="ml-2 text-gray-600">{reason.send_number}</span>
+                            </div>
+                            <div>
+                              <span className="font-semibold text-gray-700">출원인:</span>
+                              <span className="ml-2 text-gray-600">{reason.applicant}</span>
+                            </div>
+                            {reason.agent && (
+                              <div>
+                                <span className="font-semibold text-gray-700">대리인:</span>
+                                <span className="ml-2 text-gray-600">{reason.agent}</span>
+                              </div>
+                            )}
+                            <div>
+                              <span className="font-semibold text-gray-700">심사기관:</span>
+                              <span className="ml-2 text-gray-600">{reason.examination_office}</span>
+                            </div>
+                            <div>
+                              <span className="font-semibold text-gray-700">심사관:</span>
+                              <span className="ml-2 text-gray-600">{reason.examiner}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 거절 결정서 내용 */}
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                            특허 거절 결정서 내용{rejectReasons.length > 1 ? ` ${index + 1}` : ''}
+                          </h3>
+                          <div className="bg-white border border-gray-200 rounded-lg p-4">
+                            <p className="text-gray-800 whitespace-pre-line leading-relaxed">
+                              {reason.processed_text || "특허 거절 결정서 내용이 없습니다."}
+                            </p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center py-12">
+                    <p className="text-gray-600">특허 거절 결정서가 없습니다.</p>
+                  </div>
+                )
               ) : (
-                <div className="flex items-center justify-center py-12">
-                  <p className="text-gray-600">거절 사유가 없습니다.</p>
-                </div>
+                // 의견 제출 통지서 탭
+                isLoadingOpinionDocuments ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-[#3B82F6]" />
+                  </div>
+                ) : opinionDocuments.length > 0 ? (
+                  <div className="space-y-6">
+                    {opinionDocuments.map((opinion, index) => (
+                      <div key={opinion.id} className="border-b border-gray-200 pb-6 last:border-b-0">
+                        {/* 의견 제출 통지서 내용 */}
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                            의견 제출 통지서 내용{opinionDocuments.length > 1 ? ` ${index + 1}` : ''}
+                          </h3>
+                          <div className="bg-white border border-gray-200 rounded-lg p-4">
+                            <p className="text-gray-800 whitespace-pre-line leading-relaxed">
+                              {opinion.full_text || "의견 제출 통지서 내용이 없습니다."}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center py-12">
+                    <p className="text-gray-600">의견 제출 통지서가 없습니다.</p>
+                  </div>
+                )
               )}
             </div>
 
             {/* Modal Footer */}
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-end">
+            <div className="bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-end">
               <Button
                 variant="outline"
                 onClick={handleCloseRejectModal}
