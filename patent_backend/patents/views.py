@@ -67,6 +67,7 @@ class PatentViewSet(viewsets.ReadOnlyModelViewSet):
         application_end_date = serializer.validated_data.get('application_end_date', '')
         registration_start_date = serializer.validated_data.get('registration_start_date', '')
         registration_end_date = serializer.validated_data.get('registration_end_date', '')
+        legal_status = serializer.validated_data.get('legal_status', '')
 
         try:
             # PostgreSQL Full-Text Search
@@ -120,6 +121,9 @@ class PatentViewSet(viewsets.ReadOnlyModelViewSet):
             if registration_end_date:
                 reg_end = registration_end_date.replace('-', '')
                 results = results.filter(registration_date__lte=reg_end)
+
+            if legal_status:
+                results = results.filter(legal_status__icontains=legal_status)
 
             # 정렬
             results = results.order_by('-rank', '-application_date')

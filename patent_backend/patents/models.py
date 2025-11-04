@@ -80,7 +80,17 @@ class Patent(models.Model):
         blank=True,
         null=True
     )
-    
+
+    # 법적 상태
+    legal_status = models.CharField(
+        max_length=50,
+        verbose_name='법적상태',
+        blank=True,
+        null=True,
+        db_index=True,
+        help_text='등록, 공개, 거절, 취하, 포기, 소멸 등'
+    )
+
     # Full-Text Search Vector (PostgreSQL 전용)
     search_vector = SearchVectorField(
         null=True,

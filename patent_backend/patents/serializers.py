@@ -7,7 +7,7 @@ from .models import Patent, RejectDocument, OpinionDocument
 
 class PatentSerializer(serializers.ModelSerializer):
     """특허 전체 정보 Serializer"""
-    
+
     class Meta:
         model = Patent
         fields = [
@@ -23,6 +23,7 @@ class PatentSerializer(serializers.ModelSerializer):
             'cpc_code',
             'abstract',
             'claims',
+            'legal_status',
             'created_at',
             'updated_at',
         ]
@@ -31,7 +32,7 @@ class PatentSerializer(serializers.ModelSerializer):
 
 class PatentListSerializer(serializers.ModelSerializer):
     """특허 목록용 간단한 Serializer (검색 결과용)"""
-    
+
     class Meta:
         model = Patent
         fields = [
@@ -42,6 +43,7 @@ class PatentListSerializer(serializers.ModelSerializer):
             'applicant',
             'registration_number',
             'abstract',
+            'legal_status',
         ]
 
 
@@ -97,6 +99,11 @@ class PatentSearchSerializer(serializers.Serializer):
         required=False,
         allow_blank=True,
         help_text='등록일 종료 (YYYY-MM-DD 또는 YYYYMMDD)'
+    )
+    legal_status = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        help_text='법적상태 (등록, 공개, 거절, 취하, 포기, 소멸 등)'
     )
 
 

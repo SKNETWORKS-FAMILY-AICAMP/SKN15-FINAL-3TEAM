@@ -21,6 +21,7 @@ interface Patent {
   cpcCode?: string
   claims?: string
   pdfLink?: string  // 논문 PDF 링크
+  legalStatus?: string  // 법적상태
   highlight?: boolean
 }
 
@@ -142,6 +143,7 @@ export default function SearchPage() {
   const [applicationEndDate, setApplicationEndDate] = useState("")
   const [publicationStartDate, setPublicationStartDate] = useState("")
   const [publicationEndDate, setPublicationEndDate] = useState("")
+  const [legalStatusFilter, setLegalStatusFilter] = useState("")
   const [sortBy, setSortBy] = useState("latest")
   const [currentPage, setCurrentPage] = useState(1)
   const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES)
@@ -499,6 +501,7 @@ export default function SearchPage() {
           if (applicationEndDate) requestBody.application_end_date = applicationEndDate
           if (publicationStartDate) requestBody.registration_start_date = publicationStartDate
           if (publicationEndDate) requestBody.registration_end_date = publicationEndDate
+          if (legalStatusFilter) requestBody.legal_status = legalStatusFilter
         }
 
         response = await fetch(`${API_BASE_URL}${endpoint}/search/`, {
@@ -563,7 +566,8 @@ export default function SearchPage() {
             title: item.title,
             applicationNumber: item.application_number,
             applicationDate: item.application_date || '',
-            summary: item.abstract || ''
+            summary: item.abstract || '',
+            legalStatus: item.legal_status || ''
           }))
           total = data.total_count || 0
           pages = data.total_pages || 0
@@ -574,7 +578,8 @@ export default function SearchPage() {
             title: item.title,
             applicationNumber: item.application_number,
             applicationDate: item.application_date || '',
-            summary: item.abstract || ''
+            summary: item.abstract || '',
+            legalStatus: item.legal_status || ''
           }))
           total = data.count || 0
           pages = Math.ceil(total / 10)
@@ -594,6 +599,36 @@ export default function SearchPage() {
       setTotalCount(0)
       setTotalPages(0)
     }
+  }
+
+  // 법적상태 배지 렌더링
+  const getLegalStatusBadge = (status?: string) => {
+    if (!status) return null
+
+    const statusConfig: Record<string, { color: string; bgColor: string; label: string }> = {
+      '등록': { color: 'text-green-700', bgColor: 'bg-green-100', label: '등록' },
+      '공개': { color: 'text-blue-700', bgColor: 'bg-blue-100', label: '공개' },
+      '거절': { color: 'text-red-700', bgColor: 'bg-red-100', label: '거절' },
+      '취하': { color: 'text-gray-700', bgColor: 'bg-gray-100', label: '취하' },
+      '포기': { color: 'text-gray-700', bgColor: 'bg-gray-100', label: '포기' },
+    }
+
+    // "소멸" 포함 상태 처리
+    if (status.includes('소멸')) {
+      return (
+        <span className="px-2 py-1 text-xs font-medium rounded-full bg-orange-100 text-orange-700">
+          소멸
+        </span>
+      )
+    }
+
+    const config = statusConfig[status] || { color: 'text-gray-700', bgColor: 'bg-gray-100', label: status }
+
+    return (
+      <span className={`px-2 py-1 text-xs font-medium rounded-full ${config.bgColor} ${config.color}`}>
+        {config.label}
+      </span>
+    )
   }
 
   const handleSearch = () => {
@@ -648,7 +683,8 @@ export default function SearchPage() {
         registrationDate: data.registration_date || '',
         ipcCode: data.ipc_code || '',
         cpcCode: data.cpc_code || '',
-        claims: data.claims || ''
+        claims: data.claims || '',
+        legalStatus: data.legal_status || ''
       }
 
       setPatentDetails(patentDetail)
@@ -979,6 +1015,23 @@ export default function SearchPage() {
                     </div>
 
                     <div>
+                      <label className="text-xs text-gray-600 mb-1 block">법적상태</label>
+                      <select
+                        value={legalStatusFilter}
+                        onChange={(e) => setLegalStatusFilter(e.target.value)}
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">전체</option>
+                        <option value="등록">등록</option>
+                        <option value="공개">공개</option>
+                        <option value="거절">거절</option>
+                        <option value="취하">취하</option>
+                        <option value="포기">포기</option>
+                        <option value="소멸">소멸</option>
+                      </select>
+                    </div>
+
+                    <div>
                       <label className="text-xs text-gray-600 mb-1 block">정렬 방식</label>
                       <select
                         value={sortBy}
@@ -1047,7 +1100,14 @@ export default function SearchPage() {
                       onClick={searchType === "patent" ? () => handleViewDetails(patent.id) : () => handleViewPaperDetails(patent.id)}
                       className="cursor-pointer"
                     >
-                      <h3 className="text-base font-semibold mb-2">{highlightText(patent.title, searchQuery)}</h3>
+                      <div className="flex items-start justify-between mb-2">
+                        <h3 className="text-base font-semibold flex-1">{highlightText(patent.title, searchQuery)}</h3>
+                        {searchType === "patent" && patent.legalStatus && (
+                          <div className="ml-2 flex-shrink-0">
+                            {getLegalStatusBadge(patent.legalStatus)}
+                          </div>
+                        )}
+                      </div>
 
                       <div className="text-xs text-gray-500 mb-2">
                         {searchType === "patent" ? (
