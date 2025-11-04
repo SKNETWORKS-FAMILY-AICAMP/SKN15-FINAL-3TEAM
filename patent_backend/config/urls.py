@@ -20,8 +20,13 @@ urlpatterns = [
     # 챗봇 API
     path('api/chatbot/', include('chatbot.urls')),
 
+    # 특허 검색 API
+    path('api/patents/', include('patents.urls')),
+
+    # 논문 검색 API
+    path('api/papers/', include('papers.urls')),
+
     # TODO: 다른 앱 URL 추가
-    # path('api/patents/', include('patents.urls')),
     # path('api/chat/', include('chat.urls')),
     # path('api/history/', include('history.urls')),
 ]

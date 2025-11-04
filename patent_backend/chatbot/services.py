@@ -89,19 +89,25 @@ class KoSBERTChatService(BaseChatService):
             logger.error(f"KoSBERT 모델 초기화 실패: {str(e)}")
 
     def _is_lunch_request(self, message: str) -> bool:
-        """점심 추천 요청인지 감지"""
-        lunch_keywords = [
+        """점심/저녁 메뉴 추천 요청인지 감지"""
+        meal_keywords = [
             r'점심',
+            r'저녁',
             r'메뉴',
             r'뭐\s*먹',
             r'추천',
             r'식사',
             r'음식',
             r'밥',
-            r'런치'
+            r'런치',
+            r'디너',
+            r'점메추',  # 점심메뉴추천 줄임말
+            r'저메추',  # 저녁메뉴추천 줄임말
+            r'뭐먹지',
+            r'메뉴\s*추천'
         ]
         message_lower = message.lower()
-        return any(re.search(keyword, message_lower) for keyword in lunch_keywords)
+        return any(re.search(keyword, message_lower) for keyword in meal_keywords)
 
     def _detect_category_preference(self, message: str) -> Optional[str]:
         """메시지에서 음식 카테고리 선호도 감지"""
@@ -118,19 +124,26 @@ class KoSBERTChatService(BaseChatService):
                 return category
         return None
 
-    def _recommend_lunch_random(self, category: Optional[str] = None) -> str:
-        """랜덤 점심 추천"""
+    def _detect_meal_time(self, message: str) -> str:
+        """점심인지 저녁인지 감지"""
+        if re.search(r'저녁|디너|저메추', message.lower()):
+            return "저녁"
+        else:
+            return "점심"  # 기본값은 점심
+
+    def _recommend_lunch_random(self, category: Optional[str] = None, meal_time: str = "점심") -> str:
+        """랜덤 메뉴 추천 (점심/저녁)"""
         menu = get_random_menu(category)
 
-        response = f"🍽️ 오늘의 점심 추천\n\n"
+        response = f"🍽️ 오늘의 {meal_time} 추천\n\n"
         response += f"{menu['name']} ({menu['category']})\n"
         response += f"{menu['description']}\n\n"
         response += "맛있게 드세요! 😋"
 
         return response
 
-    def _recommend_lunch_smart(self, message: str) -> str:
-        """KoSBERT 기반 스마트 점심 추천"""
+    def _recommend_lunch_smart(self, message: str, meal_time: str = "점심") -> str:
+        """KoSBERT 기반 스마트 메뉴 추천"""
         try:
             # 모든 메뉴 아이템 가져오기
             all_menu_items = get_all_menu_items()
@@ -149,7 +162,7 @@ class KoSBERTChatService(BaseChatService):
             )
 
             # 응답 생성
-            response = "🔍 당신의 입맛에 맞는 추천 메뉴\n\n"
+            response = f"🔍 당신의 입맛에 맞는 {meal_time} 추천 메뉴\n\n"
 
             for rank, (idx, similarity) in enumerate(similar_results, 1):
                 menu_item = all_menu_items[idx]
@@ -161,9 +174,9 @@ class KoSBERTChatService(BaseChatService):
             return response
 
         except Exception as e:
-            logger.error(f"스마트 점심 추천 중 오류: {str(e)}")
+            logger.error(f"스마트 메뉴 추천 중 오류: {str(e)}")
             # 오류 발생 시 랜덤 추천으로 폴백
-            return self._recommend_lunch_random()
+            return self._recommend_lunch_random(meal_time=meal_time)
 
     def generate_response(self, message: str, file_content: Optional[str] = None,
                          conversation_history: Optional[List[Dict]] = None) -> str:
@@ -175,19 +188,22 @@ class KoSBERTChatService(BaseChatService):
         """
 
         try:
-            # 🍽️ 점심 추천 요청 감지 (이스터에그)
+            # 🍽️ 메뉴 추천 요청 감지 (이스터에그)
             if self._is_lunch_request(message):
+                # 점심/저녁 시간 감지
+                meal_time = self._detect_meal_time(message)
+
                 # 카테고리 선호도 감지
                 category = self._detect_category_preference(message)
 
-                # 간단한 요청 ("점심 추천", "뭐 먹지")
+                # 간단한 요청 ("점심 추천", "뭐 먹지", "점메추", "저메추")
                 if len(message.strip()) < 15 or category:
                     # 랜덤 추천
-                    return self._recommend_lunch_random(category)
+                    return self._recommend_lunch_random(category, meal_time)
                 else:
                     # 구체적인 요청 ("매운 거 먹고 싶어", "시원한 국물 요리")
                     # KoSBERT 스마트 추천
-                    return self._recommend_lunch_smart(message)
+                    return self._recommend_lunch_smart(message, meal_time)
 
             # 일반 특허 검색 로직
             # 테스트용 샘플 특허 데이터

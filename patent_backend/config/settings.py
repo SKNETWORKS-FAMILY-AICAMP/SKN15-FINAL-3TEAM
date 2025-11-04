@@ -40,8 +40,10 @@ INSTALLED_APPS = [
     'drf_spectacular',
 
     # Local apps
-    'accounts',
-    'chatbot',
+    'accounts.apps.AccountsConfig',
+    'chatbot.apps.ChatbotConfig',
+    'patents.apps.PatentsConfig',  # 특허 검색
+    'papers.apps.PapersConfig',  # 논문 검색
 ]
 
 MIDDLEWARE = [
