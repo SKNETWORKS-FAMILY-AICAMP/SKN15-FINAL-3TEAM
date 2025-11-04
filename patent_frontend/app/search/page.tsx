@@ -1084,7 +1084,7 @@ export default function SearchPage() {
                 borderBottom: '1px solid rgba(229, 231, 235, 0.2)'
               }}>
                 <p className="text-sm text-gray-600">
-                  {searchType === "patent" ? "특허" : "논문"} 총 {totalCount}건 검색됨
+                  {searchType === "patent" ? "특허" : "논문"} 총 {totalCount.toLocaleString()}건 검색됨
                 </p>
               </div>
 
@@ -1159,6 +1159,15 @@ export default function SearchPage() {
                   variant="outline"
                   size="sm"
                   disabled={currentPage === 1}
+                  onClick={() => handlePageChange(1)}
+                >
+                  처음
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage === 1}
                   onClick={() => handlePageChange(currentPage - 1)}
                 >
                   이전
@@ -1199,6 +1208,15 @@ export default function SearchPage() {
                   onClick={() => handlePageChange(currentPage + 1)}
                 >
                   다음
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage === totalPages}
+                  onClick={() => handlePageChange(totalPages)}
+                >
+                  끝
                 </Button>
               </div>
             </>
