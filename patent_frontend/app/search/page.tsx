@@ -1192,13 +1192,15 @@ export default function SearchPage() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '0.5rem'
+                gap: '0.25rem',
+                flexWrap: 'wrap'
               }}>
                 <Button
                   variant="outline"
                   size="sm"
                   disabled={currentPage === 1}
                   onClick={() => handlePageChange(1)}
+                  style={{ minWidth: '50px' }}
                 >
                   처음
                 </Button>
@@ -1208,15 +1210,16 @@ export default function SearchPage() {
                   size="sm"
                   disabled={currentPage === 1}
                   onClick={() => handlePageChange(currentPage - 1)}
+                  style={{ minWidth: '50px' }}
                 >
                   이전
                 </Button>
 
                 {/* 페이지 번호 버튼 */}
                 {(() => {
-                  const maxPagesToShow = 5
+                  const maxPagesToShow = 3  // 5개에서 3개로 축소
                   const pages = []
-                  let startPage = Math.max(1, currentPage - 2)
+                  let startPage = Math.max(1, currentPage - 1)
                   let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1)
 
                   if (endPage - startPage < maxPagesToShow - 1) {
@@ -1231,6 +1234,7 @@ export default function SearchPage() {
                         size="sm"
                         onClick={() => handlePageChange(i)}
                         className={currentPage === i ? "bg-[#3B82F6]" : ""}
+                        style={{ minWidth: '36px', padding: '0 8px' }}
                       >
                         {i}
                       </Button>
@@ -1245,6 +1249,7 @@ export default function SearchPage() {
                   size="sm"
                   disabled={currentPage === totalPages}
                   onClick={() => handlePageChange(currentPage + 1)}
+                  style={{ minWidth: '50px' }}
                 >
                   다음
                 </Button>
@@ -1254,6 +1259,7 @@ export default function SearchPage() {
                   size="sm"
                   disabled={currentPage === totalPages}
                   onClick={() => handlePageChange(totalPages)}
+                  style={{ minWidth: '50px' }}
                 >
                   끝
                 </Button>
