@@ -690,18 +690,48 @@ export default function SearchPage() {
 
       setPatentDetails(patentDetail)
       setIsLoadingDetails(false)
+      return patentDetail
     } catch (error) {
       console.error('특허 상세 정보 조회 오류:', error)
       setIsLoadingDetails(false)
       alert('특허 상세 정보를 불러오는데 실패했습니다.')
+      return null
     }
   }
 
   // 상세보기 버튼 클릭
-  const handleViewDetails = (patentId: number) => {
+  const handleViewDetails = async (patentId: number) => {
     setSelectedPatentId(patentId)
     setIsModalOpen(true)
-    fetchPatentDetails(patentId)
+    const details = await fetchPatentDetails(patentId)
+
+    // 거절 데이터 존재 여부 미리 확인
+    if (details?.applicationNumber) {
+      checkRejectDataExists(details.applicationNumber)
+    }
+  }
+
+  // 거절 데이터 존재 여부만 확인 (모달 열지 않음)
+  const checkRejectDataExists = async (applicationNumber: string) => {
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000"
+    const token = localStorage.getItem("access_token")
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/patents/reject-reasons/${applicationNumber}/`, {
+        headers: {
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        }
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setHasRejectData(data.has_reject_reasons || false)
+      } else {
+        setHasRejectData(false)
+      }
+    } catch (error) {
+      setHasRejectData(false)
+    }
   }
 
   // 모달 닫기
@@ -1529,20 +1559,16 @@ export default function SearchPage() {
               >
                 닫기
               </Button>
-              {patentDetails && (
+              {patentDetails && hasRejectData && (
                 <Button
                   onClick={async () => {
-                    const [hasReject, hasOpinion] = await Promise.all([
+                    await Promise.all([
                       fetchRejectReasons(patentDetails.applicationNumber),
                       fetchOpinionDocuments(patentDetails.applicationNumber)
                     ])
-
-                    if (!hasReject && !hasOpinion) {
-                      alert('이 특허에 대한 거절 관련 문서가 없습니다.\n현재 등록 상태이거나 거절 이력이 없는 특허입니다.')
-                    }
                   }}
                   disabled={isLoadingRejectReasons || isLoadingOpinionDocuments}
-                  className={`${hasRejectData ? 'bg-[#3B82F6] hover:bg-[#2563EB]' : 'bg-gray-400 hover:bg-gray-500'}`}
+                  className="bg-[#3B82F6] hover:bg-[#2563EB]"
                 >
                   {(isLoadingRejectReasons || isLoadingOpinionDocuments) ? (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />

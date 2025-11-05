@@ -7,9 +7,16 @@ import "./globals.css"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "특허 분석 시스템",
-  description: "AI 기반 특허 검색 및 분석 플랫폼",
-  generator: "v0.app",
+  title: "VeraClaim | AI 특허 분석 플랫폼",
+  description: "AI 기반 특허 검색, 분석 및 거절 사유 확인 서비스. 특허 정보를 빠르고 정확하게 찾아보세요.",
+  keywords: ["특허", "특허검색", "AI", "특허분석", "거절사유", "심사의견", "논문검색"],
+  authors: [{ name: "VeraClaim Team" }],
+  openGraph: {
+    title: "VeraClaim - AI 특허 분석 플랫폼",
+    description: "AI 기반 특허 검색 및 분석 서비스",
+    type: "website",
+    locale: "ko_KR",
+  },
 }
 
 export default function RootLayout({
