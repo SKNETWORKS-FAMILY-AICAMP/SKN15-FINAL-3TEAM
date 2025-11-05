@@ -1199,6 +1199,7 @@ export default function SearchPage() {
                 gap: '0.25rem',
                 flexWrap: 'wrap'
               }}>
+                {/* 처음 버튼: 첫 페이지로 이동 */}
                 <Button
                   variant="outline"
                   size="sm"
@@ -1209,11 +1210,17 @@ export default function SearchPage() {
                   처음
                 </Button>
 
+                {/* 이전 버튼: 5개 묶음씩 이동 */}
                 <Button
                   variant="outline"
                   size="sm"
                   disabled={currentPage === 1 || totalPages === 0}
-                  onClick={() => handlePageChange(currentPage - 1)}
+                  onClick={() => {
+                    const maxPagesToShow = 5
+                    const currentGroup = Math.floor((currentPage - 1) / maxPagesToShow)
+                    const prevGroupFirstPage = Math.max(1, currentGroup * maxPagesToShow)
+                    handlePageChange(prevGroupFirstPage)
+                  }}
                   style={{ minWidth: '50px' }}
                 >
                   이전
@@ -1251,16 +1258,23 @@ export default function SearchPage() {
                   return pages
                 })()}
 
+                {/* 다음 버튼: 5개 묶음씩 이동 */}
                 <Button
                   variant="outline"
                   size="sm"
                   disabled={currentPage === totalPages || totalPages === 0}
-                  onClick={() => handlePageChange(currentPage + 1)}
+                  onClick={() => {
+                    const maxPagesToShow = 5
+                    const currentGroup = Math.floor((currentPage - 1) / maxPagesToShow)
+                    const nextGroupFirstPage = Math.min(totalPages, (currentGroup + 1) * maxPagesToShow + 1)
+                    handlePageChange(nextGroupFirstPage)
+                  }}
                   style={{ minWidth: '50px' }}
                 >
                   다음
                 </Button>
 
+                {/* 끝 버튼: 마지막 페이지로 이동 */}
                 <Button
                   variant="outline"
                   size="sm"
