@@ -111,20 +111,20 @@ class PatentViewSet(viewsets.ReadOnlyModelViewSet):
                 )
 
             if application_start_date:
-                # 날짜 형식 정규화 (YYYY-MM-DD -> YYYYMMDD)
-                app_start = application_start_date.replace('-', '')
+                # 날짜 형식 정규화 (YYYY-MM-DD -> YYYY.MM.DD, DB 형식에 맞춤)
+                app_start = application_start_date.replace('-', '.')
                 results = results.filter(application_date__gte=app_start)
 
             if application_end_date:
-                app_end = application_end_date.replace('-', '')
+                app_end = application_end_date.replace('-', '.')
                 results = results.filter(application_date__lte=app_end)
 
             if registration_start_date:
-                reg_start = registration_start_date.replace('-', '')
+                reg_start = registration_start_date.replace('-', '.')
                 results = results.filter(registration_date__gte=reg_start)
 
             if registration_end_date:
-                reg_end = registration_end_date.replace('-', '')
+                reg_end = registration_end_date.replace('-', '.')
                 results = results.filter(registration_date__lte=reg_end)
 
             if legal_status:
