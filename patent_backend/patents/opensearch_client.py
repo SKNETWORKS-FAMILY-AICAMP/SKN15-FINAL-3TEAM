@@ -110,8 +110,7 @@ def create_patents_index(client, index_name='patents'):
                     'type': 'keyword'
                 },
                 'application_date': {
-                    'type': 'date',
-                    'format': 'yyyy-MM-dd||epoch_millis'
+                    'type': 'keyword'
                 },
                 'applicant': {
                     'type': 'text',
@@ -124,8 +123,7 @@ def create_patents_index(client, index_name='patents'):
                     'type': 'keyword'
                 },
                 'registration_date': {
-                    'type': 'date',
-                    'format': 'yyyy-MM-dd||epoch_millis'
+                    'type': 'keyword'
                 },
                 'ipc_code': {
                     'type': 'keyword'
@@ -251,6 +249,100 @@ def create_papers_index(client, index_name='papers'):
     return True
 
 
+def create_reject_documents_index(client, index_name='reject_documents'):
+    """
+    거절결정서 인덱스 생성 (한글 검색 최적화)
+    """
+    index_body = {
+        'settings': {
+            'index': {
+                'number_of_shards': 1,
+                'number_of_replicas': 1,
+                'analysis': {
+                    'analyzer': {
+                        'korean_analyzer': {
+                            'type': 'custom',
+                            'tokenizer': 'nori_tokenizer',
+                            'filter': ['lowercase', 'nori_readingform']
+                        }
+                    },
+                    'tokenizer': {
+                        'nori_tokenizer': {
+                            'type': 'nori_tokenizer',
+                            'decompound_mode': 'mixed'
+                        }
+                    }
+                }
+            }
+        },
+        'mappings': {
+            'properties': {
+                'doc_id': {
+                    'type': 'keyword'
+                },
+                'send_number': {
+                    'type': 'keyword'
+                },
+                'send_date': {
+                    'type': 'keyword'
+                },
+                'applicant_code': {
+                    'type': 'keyword'
+                },
+                'applicant': {
+                    'type': 'text',
+                    'analyzer': 'korean_analyzer',
+                    'fields': {
+                        'keyword': {'type': 'keyword'}
+                    }
+                },
+                'agent': {
+                    'type': 'text',
+                    'analyzer': 'korean_analyzer'
+                },
+                'application_number': {
+                    'type': 'keyword'
+                },
+                'invention_name': {
+                    'type': 'text',
+                    'analyzer': 'korean_analyzer'
+                },
+                'examination_office': {
+                    'type': 'text',
+                    'analyzer': 'korean_analyzer'
+                },
+                'examiner': {
+                    'type': 'keyword'
+                },
+                'tables_raw': {
+                    'type': 'text',
+                    'analyzer': 'korean_analyzer'
+                },
+                'processed_text': {
+                    'type': 'text',
+                    'analyzer': 'korean_analyzer'
+                },
+                'created_at': {
+                    'type': 'date'
+                },
+                'updated_at': {
+                    'type': 'date'
+                }
+            }
+        }
+    }
+
+    # 인덱스가 이미 존재하는지 확인
+    if client.indices.exists(index=index_name):
+        print(f"인덱스 '{index_name}'가 이미 존재합니다.")
+        return False
+
+    # 인덱스 생성
+    response = client.indices.create(index=index_name, body=index_body)
+    print(f"인덱스 '{index_name}' 생성 완료: {response}")
+    return True
+
+
 def delete_index(client, index_name):
     """
     인덱스 삭제
@@ -278,6 +370,9 @@ if __name__ == '__main__':
 
         print("\n논문 인덱스 생성...")
         create_papers_index(client)
+
+        print("\n거절결정서 인덱스 생성...")
+        create_reject_documents_index(client)
 
     except Exception as e:
         print(f"❌ OpenSearch 연결 실패: {e}")
