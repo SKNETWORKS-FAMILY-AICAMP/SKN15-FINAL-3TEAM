@@ -16,6 +16,7 @@ from .serializers import (
     RejectDocumentSerializer,
     OpinionDocumentSerializer
 )
+from .pagination import CustomPageNumberPagination
 import logging
 
 logger = logging.getLogger(__name__)
@@ -24,13 +25,14 @@ logger = logging.getLogger(__name__)
 class PatentViewSet(viewsets.ReadOnlyModelViewSet):
     """
     특허 검색 API
-    
+
     - 키워드 검색 (PostgreSQL Full-Text Search)
     - 필터링 (출원일, 등록번호 등)
     """
     queryset = Patent.objects.all()
     serializer_class = PatentSerializer
     permission_classes = [AllowAny]  # TODO: 테스트용, 나중에 IsAuthenticated로 변경
+    pagination_class = CustomPageNumberPagination
     
     def get_serializer_class(self):
         """액션에 따라 다른 Serializer 사용"""
@@ -143,20 +145,28 @@ class PatentViewSet(viewsets.ReadOnlyModelViewSet):
             
             # 페이지네이션
             total_count = results.count()
+            total_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 1
+
+            # 페이지 범위 검증
+            if page < 1:
+                page = 1
+            elif total_count > 0 and page > total_pages:
+                page = total_pages
+
             start = (page - 1) * page_size
             end = start + page_size
             paginated_results = results[start:end]
-            
+
             # 응답 데이터 구성
             result_serializer = PatentListSerializer(paginated_results, many=True)
-            
+
             return Response({
                 'success': True,
                 'keyword': keyword,
                 'total_count': total_count,
                 'page': page,
                 'page_size': page_size,
-                'total_pages': (total_count + page_size - 1) // page_size,
+                'total_pages': total_pages,
                 'results': result_serializer.data
             })
             

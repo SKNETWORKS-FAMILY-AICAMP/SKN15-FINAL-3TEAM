@@ -153,6 +153,7 @@ export default function SearchPage() {
   const [totalPages, setTotalPages] = useState(0)
   const [isSearching, setIsSearching] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
+  const [isUserSearched, setIsUserSearched] = useState(false)  // 사용자가 검색 버튼을 눌렀는지 여부
   const [isTyping, setIsTyping] = useState(false)
   const [activeTab, setActiveTab] = useState<"search" | "chat">("search")
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
@@ -473,8 +474,13 @@ export default function SearchPage() {
       let response;
       const endpoint = searchType === "paper" ? "/api/papers" : "/api/patents"
 
-      if (keyword.trim()) {
-        // 키워드 검색
+      // 검색 API를 사용할 조건: 키워드가 있거나 필터가 있을 때
+      const hasSearchParams = keyword.trim() ||
+        (searchType === "patent" && (ipcCode || applicationStartDate || applicationEndDate ||
+         publicationStartDate || publicationEndDate || legalStatusFilter))
+
+      if (hasSearchParams) {
+        // 키워드 검색 또는 필터 검색
         let searchFields = []
 
         if (searchType === "paper") {
@@ -524,10 +530,13 @@ export default function SearchPage() {
       }
 
       if (!response.ok) {
-        throw new Error('데이터 조회 실패')
+        const errorData = await response.json().catch(() => ({}))
+        console.error('API 에러:', response.status, errorData)
+        throw new Error(`데이터 조회 실패 (${response.status})`)
       }
 
       const data = await response.json()
+      console.log('API 응답 데이터:', data)
 
       // 백엔드 응답을 프론트엔드 형식으로 변환
       let patents: Patent[]
@@ -561,8 +570,8 @@ export default function SearchPage() {
         }
       } else {
         // 특허 데이터 변환
-        if (keyword.trim()) {
-          // 검색 API 응답
+        if (hasSearchParams) {
+          // 검색 API 응답 (키워드 검색 또는 필터 사용 시)
           patents = data.results.map((item: any) => ({
             id: item.id,
             title: item.title,
@@ -574,7 +583,7 @@ export default function SearchPage() {
           total = data.total_count || 0
           pages = data.total_pages || 0
         } else {
-          // 목록 API 응답 (DRF 페이지네이션)
+          // 목록 API 응답 (커스텀 페이지네이션)
           patents = data.results.map((item: any) => ({
             id: item.id,
             title: item.title,
@@ -584,7 +593,7 @@ export default function SearchPage() {
             legalStatus: item.legal_status || ''
           }))
           total = data.count || 0
-          pages = Math.ceil(total / 10)
+          pages = data.total_pages || Math.ceil(total / 10)
         }
       }
 
@@ -635,6 +644,7 @@ export default function SearchPage() {
 
   const handleSearch = () => {
     setCurrentPage(1)
+    setIsUserSearched(true)  // 사용자가 검색 버튼을 눌렀음을 표시
     fetchPatents(searchQuery, 1)
   }
 
@@ -650,6 +660,7 @@ export default function SearchPage() {
   // 초기 로드 시 및 searchType 변경 시 데이터 가져오기
   useEffect(() => {
     setCurrentPage(1)
+    setIsUserSearched(false)  // 검색 타입 변경 시 검색 카운트 숨김
     if (hasSearched && searchQuery) {
       // 검색어가 있으면 검색 실행
       fetchPatents(searchQuery, 1)
@@ -1120,16 +1131,18 @@ export default function SearchPage() {
           {/* 검색 결과 있음 */}
           {hasSearched && searchResults.length > 0 && (
             <>
-              <div style={{
-                flexShrink: 0,
-                padding: '1rem',
-                backgroundColor: 'rgba(249, 250, 251, 0.3)',
-                borderBottom: '1px solid rgba(229, 231, 235, 0.2)'
-              }}>
-                <p className="text-sm text-gray-600">
-                  {searchType === "patent" ? "특허" : "논문"} 총 {totalCount.toLocaleString()}건 검색됨
-                </p>
-              </div>
+              {isUserSearched && (
+                <div style={{
+                  flexShrink: 0,
+                  padding: '1rem',
+                  backgroundColor: 'rgba(249, 250, 251, 0.3)',
+                  borderBottom: '1px solid rgba(229, 231, 235, 0.2)'
+                }}>
+                  <p className="text-sm text-gray-600">
+                    {searchType === "patent" ? "특허" : "논문"} 총 {totalCount.toLocaleString()}건 검색됨
+                  </p>
+                </div>
+              )}
 
               <div style={{ flex: 1, overflowY: 'auto' }}>
                 {searchResults.map((patent) => (
@@ -1362,7 +1375,9 @@ export default function SearchPage() {
                 return (
                   <div key={message.id} className="flex justify-end">
                     <div className="bg-[#3B82F6] text-white rounded-2xl px-4 py-3 max-w-[70%]">
-                      <p>{message.content}</p>
+                      <p className="whitespace-pre-wrap break-words" style={{ lineHeight: '1.6', wordBreak: 'break-word' }}>
+                        {message.content}
+                      </p>
                       {message.file && (
                         <div className="mt-2 flex items-center gap-2 bg-blue-600 rounded-lg px-3 py-2">
                           <Paperclip className="h-4 w-4" />
@@ -1380,7 +1395,49 @@ export default function SearchPage() {
               return (
                 <div key={message.id} className="flex justify-start">
                   <div className="bg-gray-100 text-gray-800 rounded-2xl px-4 py-3 max-w-[70%]">
-                    <p>{message.content}</p>
+                    <div
+                      className="whitespace-pre-wrap break-words"
+                      style={{
+                        lineHeight: '1.6',
+                        wordBreak: 'break-word'
+                      }}
+                    >
+                      {message.content.split('\n').map((line, idx) => {
+                        // 리스트 항목 처리 (-, *, 1., 2. 등)
+                        if (line.match(/^[\s]*[-*•]\s/)) {
+                          return (
+                            <div key={idx} className="flex gap-2 mb-1">
+                              <span className="text-blue-600">•</span>
+                              <span className="flex-1">{line.replace(/^[\s]*[-*•]\s/, '')}</span>
+                            </div>
+                          )
+                        }
+                        // 번호 리스트 처리
+                        if (line.match(/^[\s]*\d+\.\s/)) {
+                          const num = line.match(/^[\s]*(\d+)\.\s/)
+                          return (
+                            <div key={idx} className="flex gap-2 mb-1">
+                              <span className="text-blue-600 font-semibold">{num?.[1]}.</span>
+                              <span className="flex-1">{line.replace(/^[\s]*\d+\.\s/, '')}</span>
+                            </div>
+                          )
+                        }
+                        // 헤더 처리 (## 또는 ** 로 감싸진 텍스트)
+                        if (line.match(/^##\s/)) {
+                          return (
+                            <div key={idx} className="font-bold text-gray-900 mt-2 mb-1">
+                              {line.replace(/^##\s/, '')}
+                            </div>
+                          )
+                        }
+                        // 일반 텍스트
+                        return line ? (
+                          <div key={idx} className="mb-1">{line}</div>
+                        ) : (
+                          <div key={idx} className="h-2" />
+                        )
+                      })}
+                    </div>
                   </div>
                 </div>
               )
