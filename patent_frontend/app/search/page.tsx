@@ -1233,20 +1233,36 @@ export default function SearchPage() {
 
                   if (totalPages === 0) return pages
 
-                  let startPage = Math.max(1, currentPage - 2)
+                  // 현재 페이지 그룹 계산
+                  const currentGroup = Math.floor((currentPage - 1) / maxPagesToShow)
+                  let startPage = currentGroup * maxPagesToShow + 1
                   let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1)
 
-                  if (endPage - startPage < maxPagesToShow - 1) {
-                    startPage = Math.max(1, endPage - maxPagesToShow + 1)
-                  }
-
                   for (let i = startPage; i <= endPage; i++) {
+                    const isFirstInGroup = i === startPage
+                    const isLastInGroup = i === endPage
+
                     pages.push(
                       <Button
                         key={i}
                         variant={currentPage === i ? "default" : "outline"}
                         size="sm"
-                        onClick={() => handlePageChange(i)}
+                        onClick={() => {
+                          // 첫 번째 페이지 번호 클릭: 이전 그룹으로
+                          if (isFirstInGroup && startPage > 1) {
+                            const prevGroupLastPage = startPage - 1
+                            handlePageChange(prevGroupLastPage)
+                          }
+                          // 마지막 페이지 번호 클릭: 다음 그룹으로
+                          else if (isLastInGroup && endPage < totalPages) {
+                            const nextGroupFirstPage = endPage + 1
+                            handlePageChange(nextGroupFirstPage)
+                          }
+                          // 중간 페이지 번호: 해당 페이지로 이동
+                          else {
+                            handlePageChange(i)
+                          }
+                        }}
                         className={currentPage === i ? "bg-[#3B82F6]" : ""}
                         style={{ minWidth: '40px', padding: '0 10px' }}
                       >
