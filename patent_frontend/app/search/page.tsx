@@ -639,6 +639,10 @@ export default function SearchPage() {
   }
 
   const handlePageChange = (page: number) => {
+    // 유효한 페이지 범위 확인
+    if (page < 1 || (totalPages > 0 && page > totalPages)) {
+      return
+    }
     setCurrentPage(page)
     fetchPatents(searchQuery, page)
   }
@@ -1198,7 +1202,7 @@ export default function SearchPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={currentPage === 1}
+                  disabled={currentPage === 1 || totalPages === 0}
                   onClick={() => handlePageChange(1)}
                   style={{ minWidth: '50px' }}
                 >
@@ -1208,7 +1212,7 @@ export default function SearchPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={currentPage === 1}
+                  disabled={currentPage === 1 || totalPages === 0}
                   onClick={() => handlePageChange(currentPage - 1)}
                   style={{ minWidth: '50px' }}
                 >
@@ -1217,9 +1221,12 @@ export default function SearchPage() {
 
                 {/* 페이지 번호 버튼 */}
                 {(() => {
-                  const maxPagesToShow = 3  // 5개에서 3개로 축소
+                  const maxPagesToShow = 5
                   const pages = []
-                  let startPage = Math.max(1, currentPage - 1)
+
+                  if (totalPages === 0) return pages
+
+                  let startPage = Math.max(1, currentPage - 2)
                   let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1)
 
                   if (endPage - startPage < maxPagesToShow - 1) {
@@ -1234,7 +1241,7 @@ export default function SearchPage() {
                         size="sm"
                         onClick={() => handlePageChange(i)}
                         className={currentPage === i ? "bg-[#3B82F6]" : ""}
-                        style={{ minWidth: '36px', padding: '0 8px' }}
+                        style={{ minWidth: '40px', padding: '0 10px' }}
                       >
                         {i}
                       </Button>
@@ -1247,7 +1254,7 @@ export default function SearchPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={currentPage === totalPages}
+                  disabled={currentPage === totalPages || totalPages === 0}
                   onClick={() => handlePageChange(currentPage + 1)}
                   style={{ minWidth: '50px' }}
                 >
@@ -1257,7 +1264,7 @@ export default function SearchPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={currentPage === totalPages}
+                  disabled={currentPage === totalPages || totalPages === 0}
                   onClick={() => handlePageChange(totalPages)}
                   style={{ minWidth: '50px' }}
                 >
