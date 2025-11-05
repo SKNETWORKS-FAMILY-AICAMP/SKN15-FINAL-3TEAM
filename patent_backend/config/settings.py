@@ -234,17 +234,21 @@ SPECTACULAR_SETTINGS = {
 
 
 # Chatbot Model Settings
-# 'kosbert': KoSBERT 기반 검색 모델 (기본값)
-# 'llama': LLaMA 8B 모델
-CHATBOT_SERVICE = os.getenv('CHATBOT_SERVICE', 'kosbert')
+# 'llama': LLaMA 모델 (기본값, 외부 서버 필요)
+# 'custom': 사용자 정의 모델 (멀티턴 대화 지원, 외부 서버 필요)
+# 참고: KoSBERT는 제거됨 - 서버 경량화를 위해 외부 모델 서버 사용
+CHATBOT_SERVICE = os.getenv('CHATBOT_SERVICE', 'llama')
 
 # LLaMA Model Settings
 MODEL_SERVER_URL = os.getenv('MODEL_SERVER_URL', 'http://localhost:8001')
 LLAMA_MODEL_NAME = os.getenv('LLAMA_MODEL_NAME', 'meta-llama/Llama-3.2-3B-Instruct')  # LLaMA 3.2 3B 사용
 
-# KoSBERT Model Settings
-KOSBERT_MODEL_NAME = os.getenv('KOSBERT_MODEL_NAME', 'BM-K/KoSimCSE-roberta')
-KOSBERT_CACHE_DIR = os.getenv('KOSBERT_CACHE_DIR', None)  # None이면 기본 캐시 디렉토리 사용 (~/.cache/huggingface)
+# Custom Model Settings (사용자 정의 모델)
+CUSTOM_MODEL_SERVER_URL = os.getenv('CUSTOM_MODEL_SERVER_URL', 'http://localhost:8002')
+
+# KoSBERT Model Settings (제거됨)
+# KOSBERT_MODEL_NAME = os.getenv('KOSBERT_MODEL_NAME', 'BM-K/KoSimCSE-roberta')
+# KOSBERT_CACHE_DIR = os.getenv('KOSBERT_CACHE_DIR', None)
 
 
 # File Upload Settings
