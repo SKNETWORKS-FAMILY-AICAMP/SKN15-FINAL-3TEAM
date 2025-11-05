@@ -171,6 +171,7 @@ export default function SearchPage() {
   const [rejectDocumentTab, setRejectDocumentTab] = useState<"specification" | "opinion">("specification")
   const [opinionDocuments, setOpinionDocuments] = useState<OpinionDocument[]>([])
   const [isLoadingOpinionDocuments, setIsLoadingOpinionDocuments] = useState(false)
+  const [hasRejectData, setHasRejectData] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -772,16 +773,20 @@ export default function SearchPage() {
 
       if (data.has_reject_reasons && data.results) {
         setRejectReasons(data.results)
+        setHasRejectData(true)
         setIsRejectModalOpen(true)
       } else {
-        alert('해당 특허의 거절 사유가 없습니다.')
+        setRejectReasons([])
+        setHasRejectData(false)
       }
 
       setIsLoadingRejectReasons(false)
+      return data.has_reject_reasons
     } catch (error) {
       console.error('거절 사유 조회 오류:', error)
       setIsLoadingRejectReasons(false)
-      alert('거절 사유를 불러오는데 실패했습니다.')
+      setHasRejectData(false)
+      return false
     }
   }
 
@@ -817,10 +822,12 @@ export default function SearchPage() {
       }
 
       setIsLoadingOpinionDocuments(false)
+      return data.has_opinion_documents
     } catch (error) {
       console.error('의견 제출 통지서 조회 오류:', error)
       setIsLoadingOpinionDocuments(false)
       setOpinionDocuments([])
+      return false
     }
   }
 
@@ -1525,13 +1532,17 @@ export default function SearchPage() {
               {patentDetails && (
                 <Button
                   onClick={async () => {
-                    await Promise.all([
+                    const [hasReject, hasOpinion] = await Promise.all([
                       fetchRejectReasons(patentDetails.applicationNumber),
                       fetchOpinionDocuments(patentDetails.applicationNumber)
                     ])
+
+                    if (!hasReject && !hasOpinion) {
+                      alert('이 특허에 대한 거절 관련 문서가 없습니다.\n현재 등록 상태이거나 거절 이력이 없는 특허입니다.')
+                    }
                   }}
                   disabled={isLoadingRejectReasons || isLoadingOpinionDocuments}
-                  className="bg-[#3B82F6] hover:bg-[#2563EB]"
+                  className={`${hasRejectData ? 'bg-[#3B82F6] hover:bg-[#2563EB]' : 'bg-gray-400 hover:bg-gray-500'}`}
                 >
                   {(isLoadingRejectReasons || isLoadingOpinionDocuments) ? (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
