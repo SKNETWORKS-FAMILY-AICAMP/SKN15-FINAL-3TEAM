@@ -144,6 +144,7 @@ export default function SearchPage() {
   const [publicationStartDate, setPublicationStartDate] = useState("")
   const [publicationEndDate, setPublicationEndDate] = useState("")
   const [legalStatusFilter, setLegalStatusFilter] = useState("")
+  const [sortBy, setSortBy] = useState("latest")
   const [currentPage, setCurrentPage] = useState(1)
   const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES)
   const [inputMessage, setInputMessage] = useState("")
@@ -502,6 +503,7 @@ export default function SearchPage() {
           if (publicationStartDate) requestBody.registration_start_date = publicationStartDate
           if (publicationEndDate) requestBody.registration_end_date = publicationEndDate
           if (legalStatusFilter) requestBody.legal_status = legalStatusFilter
+          requestBody.sort_by = sortBy  // 정렬 방식 추가
         }
 
         response = await fetch(`${API_BASE_URL}${endpoint}/search/`, {
@@ -1064,6 +1066,18 @@ export default function SearchPage() {
                         <option value="취하">취하</option>
                         <option value="포기">포기</option>
                         <option value="소멸">소멸</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-xs text-gray-600 mb-1 block">정렬 방식</label>
+                      <select
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value)}
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="latest">최신순</option>
+                        <option value="oldest">오래된순</option>
                       </select>
                     </div>
 

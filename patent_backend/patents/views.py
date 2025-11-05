@@ -68,6 +68,7 @@ class PatentViewSet(viewsets.ReadOnlyModelViewSet):
         registration_start_date = serializer.validated_data.get('registration_start_date', '')
         registration_end_date = serializer.validated_data.get('registration_end_date', '')
         legal_status = serializer.validated_data.get('legal_status', '')
+        sort_by = serializer.validated_data.get('sort_by', 'latest')
 
         try:
             # 키워드가 비어있는 경우 (필터만 사용)
@@ -130,11 +131,15 @@ class PatentViewSet(viewsets.ReadOnlyModelViewSet):
             if legal_status:
                 results = results.filter(legal_status__icontains=legal_status)
 
-            # 정렬 (키워드가 있으면 랭킹순, 없으면 출원일순)
+            # 정렬 처리
+            date_order = 'application_date' if sort_by == 'oldest' else '-application_date'
+
             if keyword and keyword.strip():
-                results = results.order_by('-rank', '-application_date')
+                # 키워드 검색 시: 랭킹 + 날짜순
+                results = results.order_by('-rank', date_order)
             else:
-                results = results.order_by('-application_date')
+                # 필터만 사용 시: 날짜순만
+                results = results.order_by(date_order)
             
             # 페이지네이션
             total_count = results.count()

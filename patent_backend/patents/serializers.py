@@ -107,6 +107,12 @@ class PatentSearchSerializer(serializers.Serializer):
         allow_blank=True,
         help_text='법적상태 (등록, 공개, 거절, 취하, 포기, 소멸 등)'
     )
+    sort_by = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default='latest',
+        help_text='정렬 방식 (latest: 최신순, oldest: 오래된순)'
+    )
 
 
 class RejectDocumentSerializer(serializers.ModelSerializer):
