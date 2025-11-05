@@ -1,0 +1,269 @@
+"""
+OpenSearch 클라이언트 유틸리티
+특허 검색을 위한 OpenSearch 연결 및 인덱스 관리
+"""
+import os
+from opensearchpy import OpenSearch, RequestsHttpConnection
+from requests_aws4auth import AWS4Auth
+
+
+def get_opensearch_client():
+    """
+    OpenSearch 클라이언트 생성 및 반환
+    """
+    host = os.getenv('OPENSEARCH_HOST', 'localhost')
+    port = int(os.getenv('OPENSEARCH_PORT', 9200))
+    use_ssl = os.getenv('OPENSEARCH_USE_SSL', 'False') == 'True'
+    verify_certs = os.getenv('OPENSEARCH_VERIFY_CERTS', 'False') == 'True'
+
+    # AWS 자격증명 설정 (AWS OpenSearch 사용 시)
+    aws_access_key = os.getenv('AWS_ACCESS_KEY_ID')
+    aws_secret_key = os.getenv('AWS_SECRET_ACCESS_KEY')
+    region = os.getenv('AWS_REGION', 'ap-northeast-2')
+
+    if aws_access_key and aws_secret_key:
+        # AWS OpenSearch 서비스 사용
+        awsauth = AWS4Auth(
+            aws_access_key,
+            aws_secret_key,
+            region,
+            'es'  # 서비스 이름
+        )
+
+        client = OpenSearch(
+            hosts=[{'host': host, 'port': port}],
+            http_auth=awsauth,
+            use_ssl=use_ssl,
+            verify_certs=verify_certs,
+            connection_class=RequestsHttpConnection,
+            timeout=30
+        )
+    else:
+        # 로컬 OpenSearch 사용
+        client = OpenSearch(
+            hosts=[{'host': host, 'port': port}],
+            use_ssl=use_ssl,
+            verify_certs=verify_certs,
+            timeout=30
+        )
+
+    return client
+
+
+def create_patents_index(client, index_name='patents'):
+    """
+    특허 인덱스 생성 (한글 검색 최적화)
+    """
+    index_body = {
+        'settings': {
+            'index': {
+                'number_of_shards': 2,
+                'number_of_replicas': 1,
+                'analysis': {
+                    'analyzer': {
+                        'korean_analyzer': {
+                            'type': 'custom',
+                            'tokenizer': 'nori_tokenizer',
+                            'filter': ['lowercase', 'nori_readingform']
+                        }
+                    },
+                    'tokenizer': {
+                        'nori_tokenizer': {
+                            'type': 'nori_tokenizer',
+                            'decompound_mode': 'mixed'
+                        }
+                    }
+                }
+            }
+        },
+        'mappings': {
+            'properties': {
+                'title': {
+                    'type': 'text',
+                    'analyzer': 'korean_analyzer',
+                    'fields': {
+                        'keyword': {'type': 'keyword'}
+                    }
+                },
+                'title_en': {
+                    'type': 'text',
+                    'analyzer': 'standard',
+                    'fields': {
+                        'keyword': {'type': 'keyword'}
+                    }
+                },
+                'application_number': {
+                    'type': 'keyword'
+                },
+                'application_date': {
+                    'type': 'date',
+                    'format': 'yyyy-MM-dd||epoch_millis'
+                },
+                'applicant': {
+                    'type': 'text',
+                    'analyzer': 'korean_analyzer',
+                    'fields': {
+                        'keyword': {'type': 'keyword'}
+                    }
+                },
+                'registration_number': {
+                    'type': 'keyword'
+                },
+                'registration_date': {
+                    'type': 'date',
+                    'format': 'yyyy-MM-dd||epoch_millis'
+                },
+                'ipc_code': {
+                    'type': 'keyword'
+                },
+                'cpc_code': {
+                    'type': 'keyword'
+                },
+                'abstract': {
+                    'type': 'text',
+                    'analyzer': 'korean_analyzer'
+                },
+                'claims': {
+                    'type': 'text',
+                    'analyzer': 'korean_analyzer'
+                },
+                'legal_status': {
+                    'type': 'keyword'
+                },
+                'created_at': {
+                    'type': 'date'
+                },
+                'updated_at': {
+                    'type': 'date'
+                }
+            }
+        }
+    }
+
+    # 인덱스가 이미 존재하는지 확인
+    if client.indices.exists(index=index_name):
+        print(f"인덱스 '{index_name}'가 이미 존재합니다.")
+        return False
+
+    # 인덱스 생성
+    response = client.indices.create(index=index_name, body=index_body)
+    print(f"인덱스 '{index_name}' 생성 완료: {response}")
+    return True
+
+
+def create_papers_index(client, index_name='papers'):
+    """
+    논문 인덱스 생성 (한글/영문 검색 최적화)
+    """
+    index_body = {
+        'settings': {
+            'index': {
+                'number_of_shards': 1,
+                'number_of_replicas': 1,
+                'analysis': {
+                    'analyzer': {
+                        'korean_analyzer': {
+                            'type': 'custom',
+                            'tokenizer': 'nori_tokenizer',
+                            'filter': ['lowercase', 'nori_readingform']
+                        }
+                    },
+                    'tokenizer': {
+                        'nori_tokenizer': {
+                            'type': 'nori_tokenizer',
+                            'decompound_mode': 'mixed'
+                        }
+                    }
+                }
+            }
+        },
+        'mappings': {
+            'properties': {
+                'title_en': {
+                    'type': 'text',
+                    'analyzer': 'standard'
+                },
+                'title_kr': {
+                    'type': 'text',
+                    'analyzer': 'korean_analyzer',
+                    'fields': {
+                        'keyword': {'type': 'keyword'}
+                    }
+                },
+                'authors': {
+                    'type': 'text',
+                    'analyzer': 'korean_analyzer',
+                    'fields': {
+                        'keyword': {'type': 'keyword'}
+                    }
+                },
+                'abstract_en': {
+                    'type': 'text',
+                    'analyzer': 'standard'
+                },
+                'abstract_kr': {
+                    'type': 'text',
+                    'analyzer': 'korean_analyzer'
+                },
+                'abstract_page_link': {
+                    'type': 'keyword',
+                    'index': False
+                },
+                'pdf_link': {
+                    'type': 'keyword',
+                    'index': False
+                },
+                'source_file': {
+                    'type': 'keyword'
+                },
+                'created_at': {
+                    'type': 'date'
+                },
+                'updated_at': {
+                    'type': 'date'
+                }
+            }
+        }
+    }
+
+    # 인덱스가 이미 존재하는지 확인
+    if client.indices.exists(index=index_name):
+        print(f"인덱스 '{index_name}'가 이미 존재합니다.")
+        return False
+
+    # 인덱스 생성
+    response = client.indices.create(index=index_name, body=index_body)
+    print(f"인덱스 '{index_name}' 생성 완료: {response}")
+    return True
+
+
+def delete_index(client, index_name):
+    """
+    인덱스 삭제
+    """
+    if client.indices.exists(index=index_name):
+        response = client.indices.delete(index=index_name)
+        print(f"인덱스 '{index_name}' 삭제 완료: {response}")
+        return True
+    else:
+        print(f"인덱스 '{index_name}'가 존재하지 않습니다.")
+        return False
+
+
+if __name__ == '__main__':
+    # 테스트
+    print("OpenSearch 클라이언트 연결 테스트...")
+    try:
+        client = get_opensearch_client()
+        print("✅ OpenSearch 연결 성공")
+        print(f"클러스터 정보: {client.info()}")
+
+        # 인덱스 생성 테스트
+        print("\n특허 인덱스 생성...")
+        create_patents_index(client)
+
+        print("\n논문 인덱스 생성...")
+        create_papers_index(client)
+
+    except Exception as e:
+        print(f"❌ OpenSearch 연결 실패: {e}")

@@ -70,34 +70,39 @@ class PatentViewSet(viewsets.ReadOnlyModelViewSet):
         legal_status = serializer.validated_data.get('legal_status', '')
 
         try:
-            # PostgreSQL Full-Text Search
-            query = SearchQuery(keyword, config='simple')  # 한글은 'simple' 사용
+            # 키워드가 비어있는 경우 (필터만 사용)
+            if not keyword or keyword.strip() == '':
+                # 필터만 적용하여 전체 데이터 조회
+                results = Patent.objects.all()
+            else:
+                # PostgreSQL Full-Text Search
+                query = SearchQuery(keyword, config='simple')  # 한글은 'simple' 사용
 
-            # 검색 벡터 생성 (동적으로 필드 선택)
-            search_vector = None
-            if 'title' in search_fields:
-                search_vector = SearchVector('title', weight='A')
-            if 'abstract' in search_fields:
-                if search_vector:
-                    search_vector += SearchVector('abstract', weight='B')
-                else:
-                    search_vector = SearchVector('abstract', weight='B')
-            if 'claims' in search_fields:
-                if search_vector:
-                    search_vector += SearchVector('claims', weight='C')
-                else:
-                    search_vector = SearchVector('claims', weight='C')
+                # 검색 벡터 생성 (동적으로 필드 선택)
+                search_vector = None
+                if 'title' in search_fields:
+                    search_vector = SearchVector('title', weight='A')
+                if 'abstract' in search_fields:
+                    if search_vector:
+                        search_vector += SearchVector('abstract', weight='B')
+                    else:
+                        search_vector = SearchVector('abstract', weight='B')
+                if 'claims' in search_fields:
+                    if search_vector:
+                        search_vector += SearchVector('claims', weight='C')
+                    else:
+                        search_vector = SearchVector('claims', weight='C')
 
-            # 검색 필드가 하나도 선택되지 않은 경우 기본값 사용
-            if not search_vector:
-                search_vector = SearchVector('title', weight='A')
+                # 검색 필드가 하나도 선택되지 않은 경우 기본값 사용
+                if not search_vector:
+                    search_vector = SearchVector('title', weight='A')
 
-            # 검색 실행 및 랭킹
-            results = Patent.objects.annotate(
-                rank=SearchRank(search_vector, query)
-            ).filter(
-                rank__gte=0.001  # 최소 관련도 필터
-            )
+                # 검색 실행 및 랭킹
+                results = Patent.objects.annotate(
+                    rank=SearchRank(search_vector, query)
+                ).filter(
+                    rank__gte=0.001  # 최소 관련도 필터
+                )
 
             # 고급 필터 적용
             if ipc_code:
@@ -125,8 +130,11 @@ class PatentViewSet(viewsets.ReadOnlyModelViewSet):
             if legal_status:
                 results = results.filter(legal_status__icontains=legal_status)
 
-            # 정렬
-            results = results.order_by('-rank', '-application_date')
+            # 정렬 (키워드가 있으면 랭킹순, 없으면 출원일순)
+            if keyword and keyword.strip():
+                results = results.order_by('-rank', '-application_date')
+            else:
+                results = results.order_by('-application_date')
             
             # 페이지네이션
             total_count = results.count()
