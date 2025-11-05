@@ -16,13 +16,27 @@ def get_opensearch_client():
     use_ssl = os.getenv('OPENSEARCH_USE_SSL', 'False') == 'True'
     verify_certs = os.getenv('OPENSEARCH_VERIFY_CERTS', 'False') == 'True'
 
+    # 사용자 인증 정보 (마스터 사용자)
+    opensearch_user = os.getenv('OPENSEARCH_USER')
+    opensearch_password = os.getenv('OPENSEARCH_PASSWORD')
+
     # AWS 자격증명 설정 (AWS OpenSearch 사용 시)
     aws_access_key = os.getenv('AWS_ACCESS_KEY_ID')
     aws_secret_key = os.getenv('AWS_SECRET_ACCESS_KEY')
     region = os.getenv('AWS_REGION', 'ap-northeast-2')
 
-    if aws_access_key and aws_secret_key:
-        # AWS OpenSearch 서비스 사용
+    if opensearch_user and opensearch_password:
+        # 사용자 이름/비밀번호 인증 (VPC 내부 또는 퍼블릭 액세스)
+        client = OpenSearch(
+            hosts=[{'host': host, 'port': port}],
+            http_auth=(opensearch_user, opensearch_password),
+            use_ssl=use_ssl,
+            verify_certs=verify_certs,
+            connection_class=RequestsHttpConnection,
+            timeout=30
+        )
+    elif aws_access_key and aws_secret_key:
+        # AWS IAM 인증
         awsauth = AWS4Auth(
             aws_access_key,
             aws_secret_key,
@@ -39,7 +53,7 @@ def get_opensearch_client():
             timeout=30
         )
     else:
-        # 로컬 OpenSearch 사용
+        # 로컬 OpenSearch 사용 (인증 없음)
         client = OpenSearch(
             hosts=[{'host': host, 'port': port}],
             use_ssl=use_ssl,
