@@ -3,8 +3,23 @@ OpenSearch 클라이언트 유틸리티
 특허 검색을 위한 OpenSearch 연결 및 인덱스 관리
 """
 import os
+from pathlib import Path
 from opensearchpy import OpenSearch, RequestsHttpConnection
 from requests_aws4auth import AWS4Auth
+
+# .env 파일 로드
+try:
+    from dotenv import load_dotenv
+    BASE_DIR = Path(__file__).resolve().parent.parent
+    load_dotenv(BASE_DIR / '.env')
+except ImportError:
+    # dotenv가 없으면 Django settings 사용
+    try:
+        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+        import django
+        django.setup()
+    except ImportError:
+        pass
 
 
 def get_opensearch_client():
@@ -79,12 +94,6 @@ def create_patents_index(client, index_name='patents'):
                             'type': 'custom',
                             'tokenizer': 'nori_tokenizer',
                             'filter': ['lowercase', 'nori_readingform']
-                        }
-                    },
-                    'tokenizer': {
-                        'nori_tokenizer': {
-                            'type': 'nori_tokenizer',
-                            'decompound_mode': 'mixed'
                         }
                     }
                 }
@@ -179,12 +188,6 @@ def create_papers_index(client, index_name='papers'):
                             'tokenizer': 'nori_tokenizer',
                             'filter': ['lowercase', 'nori_readingform']
                         }
-                    },
-                    'tokenizer': {
-                        'nori_tokenizer': {
-                            'type': 'nori_tokenizer',
-                            'decompound_mode': 'mixed'
-                        }
                     }
                 }
             }
@@ -264,12 +267,6 @@ def create_reject_documents_index(client, index_name='reject_documents'):
                             'type': 'custom',
                             'tokenizer': 'nori_tokenizer',
                             'filter': ['lowercase', 'nori_readingform']
-                        }
-                    },
-                    'tokenizer': {
-                        'nori_tokenizer': {
-                            'type': 'nori_tokenizer',
-                            'decompound_mode': 'mixed'
                         }
                     }
                 }
@@ -359,6 +356,9 @@ def delete_index(client, index_name):
 if __name__ == '__main__':
     # 테스트
     print("OpenSearch 클라이언트 연결 테스트...")
+    print(f"DEBUG - OPENSEARCH_HOST: {os.getenv('OPENSEARCH_HOST', 'localhost')}")
+    print(f"DEBUG - OPENSEARCH_PORT: {os.getenv('OPENSEARCH_PORT', '9200')}")
+    print(f"DEBUG - OPENSEARCH_USE_SSL: {os.getenv('OPENSEARCH_USE_SSL', 'False')}")
     try:
         client = get_opensearch_client()
         print("✅ OpenSearch 연결 성공")
