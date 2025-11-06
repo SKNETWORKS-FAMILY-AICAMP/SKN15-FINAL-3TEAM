@@ -32,14 +32,15 @@ class OpenSearchService:
         # 검색 쿼리 구성
         must_queries = []
 
-        # 키워드 검색 (multi_match)
+        # 키워드 검색 (multi_match with fuzziness)
         if keyword:
             must_queries.append({
                 'multi_match': {
                     'query': keyword,
                     'fields': search_fields,
                     'type': 'best_fields',
-                    'operator': 'or'
+                    'operator': 'or',
+                    'fuzziness': 'AUTO'  # 오타 허용 (1-2글자)
                 }
             })
 
@@ -182,7 +183,8 @@ class OpenSearchService:
                     'query': keyword,
                     'fields': search_fields,
                     'type': 'best_fields',
-                    'operator': 'or'
+                    'operator': 'or',
+                    'fuzziness': 'AUTO'  # 오타 허용 (1-2글자)
                 }
             }
         else:
