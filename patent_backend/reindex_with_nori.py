@@ -1,5 +1,5 @@
 """
-Nori 기반 OpenSearch 인덱스 재생성 및 데이터 마이그레이션 스크립트
+Nori 기반 OpenSearch 인덱스 증분 업데이트 스크립트
 
 사용 전 필수 작업:
 1. AWS Console → OpenSearch 도메인 선택
@@ -9,8 +9,9 @@ Nori 기반 OpenSearch 인덱스 재생성 및 데이터 마이그레이션 스�
 5. 이 스크립트 실행
 
 주의사항:
-- 기존 인덱스를 삭제하고 새로 생성합니다
-- 데이터 손실 방지를 위해 PostgreSQL에서 다시 읽어옵니다
+- 인덱스가 없으면 새로 생성합니다
+- 이미 인덱싱된 데이터는 건너뜁니다 (증분 업데이트)
+- PostgreSQL 데이터 중 OpenSearch에 없는 것만 추가합니다
 """
 import os
 import sys
@@ -26,23 +27,24 @@ from patents.opensearch_client import get_opensearch_client, create_patents_inde
 
 
 def reindex_patents(client):
-    """특허 데이터 재인덱싱"""
+    """특허 데이터 증분 인덱싱"""
     print("\n" + "="*60)
-    print("특허 데이터 재인덱싱 시작")
+    print("특허 데이터 증분 인덱싱 시작")
     print("="*60)
 
-    # 기존 인덱스 삭제
-    print("\n1️⃣  기존 patents 인덱스 삭제...")
-    delete_index(client, 'patents')
-
-    # 새 인덱스 생성 (Nori 기반)
-    print("\n2️⃣  Nori 기반 patents 인덱스 생성...")
-    if not create_patents_index(client):
-        print("⚠️  인덱스 생성 실패 또는 이미 존재함")
-        return
+    # 인덱스가 없으면 생성 (Nori 기반)
+    print("\n1️⃣  patents 인덱스 확인 및 생성...")
+    if not client.indices.exists(index='patents'):
+        print("   인덱스가 없습니다. 새로 생성합니다...")
+        if not create_patents_index(client):
+            print("⚠️  인덱스 생성 실패")
+            return
+        print("✅ 인덱스 생성 완료")
+    else:
+        print("✅ 인덱스가 이미 존재합니다")
 
     # PostgreSQL에서 데이터 읽기
-    print("\n3️⃣  PostgreSQL에서 특허 데이터 읽기...")
+    print("\n2️⃣  PostgreSQL에서 특허 데이터 읽기...")
     patents = Patent.objects.all()
     total = patents.count()
     print(f"총 {total:,}건의 특허 데이터 발견")
@@ -51,17 +53,33 @@ def reindex_patents(client):
         print("⚠️  마이그레이션할 데이터가 없습니다")
         return
 
-    # OpenSearch에 bulk 인덱싱
-    print("\n4️⃣  OpenSearch에 데이터 인덱싱 중...")
+    # 기존 인덱싱된 ID 확인
+    print("\n3️⃣  기존 인덱싱된 데이터 확인 중...")
+    existing_count = client.count(index='patents')['count']
+    print(f"OpenSearch에 이미 {existing_count:,}건 인덱싱됨")
+
+    # OpenSearch에 증분 인덱싱
+    print("\n4️⃣  OpenSearch에 데이터 인덱싱 중 (이미 있는 데이터는 건너뜀)...")
     batch_size = 500
     success_count = 0
+    skip_count = 0
     error_count = 0
 
     actions = []
     for i, patent in enumerate(patents, 1):
+        patent_id = str(patent.id)
+
+        # 이미 인덱싱되어 있는지 확인
+        try:
+            if client.exists(index='patents', id=patent_id):
+                skip_count += 1
+                continue
+        except Exception as e:
+            pass  # 확인 실패 시 인덱싱 시도
+
         doc = {
             '_index': 'patents',
-            '_id': str(patent.id),
+            '_id': patent_id,
             '_source': {
                 'title': patent.title or '',
                 'title_en': patent.title_en or '',
@@ -87,7 +105,7 @@ def reindex_patents(client):
                 from opensearchpy import helpers
                 helpers.bulk(client, actions)
                 success_count += len(actions)
-                print(f"  진행률: {success_count}/{total} ({success_count/total*100:.1f}%)")
+                print(f"  진행률: 처리 {i}/{total} | 추가 {success_count}건 | 건너뜀 {skip_count}건")
                 actions = []
             except Exception as e:
                 print(f"❌ Bulk 인덱싱 오류: {e}")
@@ -100,35 +118,36 @@ def reindex_patents(client):
             from opensearchpy import helpers
             helpers.bulk(client, actions)
             success_count += len(actions)
-            print(f"  진행률: {success_count}/{total} ({success_count/total*100:.1f}%)")
         except Exception as e:
             print(f"❌ Bulk 인덱싱 오류: {e}")
             error_count += len(actions)
 
     print(f"\n✅ 특허 인덱싱 완료!")
-    print(f"   성공: {success_count:,}건")
+    print(f"   신규 추가: {success_count:,}건")
+    print(f"   기존 데이터 건너뜀: {skip_count:,}건")
     if error_count > 0:
         print(f"   실패: {error_count:,}건")
 
 
 def reindex_papers(client):
-    """논문 데이터 재인덱싱"""
+    """논문 데이터 증분 인덱싱"""
     print("\n" + "="*60)
-    print("논문 데이터 재인덱싱 시작")
+    print("논문 데이터 증분 인덱싱 시작")
     print("="*60)
 
-    # 기존 인덱스 삭제
-    print("\n1️⃣  기존 papers 인덱스 삭제...")
-    delete_index(client, 'papers')
-
-    # 새 인덱스 생성 (Nori 기반)
-    print("\n2️⃣  Nori 기반 papers 인덱스 생성...")
-    if not create_papers_index(client):
-        print("⚠️  인덱스 생성 실패 또는 이미 존재함")
-        return
+    # 인덱스가 없으면 생성 (Nori 기반)
+    print("\n1️⃣  papers 인덱스 확인 및 생성...")
+    if not client.indices.exists(index='papers'):
+        print("   인덱스가 없습니다. 새로 생성합니다...")
+        if not create_papers_index(client):
+            print("⚠️  인덱스 생성 실패")
+            return
+        print("✅ 인덱스 생성 완료")
+    else:
+        print("✅ 인덱스가 이미 존재합니다")
 
     # PostgreSQL에서 데이터 읽기
-    print("\n3️⃣  PostgreSQL에서 논문 데이터 읽기...")
+    print("\n2️⃣  PostgreSQL에서 논문 데이터 읽기...")
     papers = Paper.objects.all()
     total = papers.count()
     print(f"총 {total:,}건의 논문 데이터 발견")
@@ -137,17 +156,33 @@ def reindex_papers(client):
         print("⚠️  마이그레이션할 데이터가 없습니다")
         return
 
-    # OpenSearch에 bulk 인덱싱
-    print("\n4️⃣  OpenSearch에 데이터 인덱싱 중...")
+    # 기존 인덱싱된 ID 확인
+    print("\n3️⃣  기존 인덱싱된 데이터 확인 중...")
+    existing_count = client.count(index='papers')['count']
+    print(f"OpenSearch에 이미 {existing_count:,}건 인덱싱됨")
+
+    # OpenSearch에 증분 인덱싱
+    print("\n4️⃣  OpenSearch에 데이터 인덱싱 중 (이미 있는 데이터는 건너뜀)...")
     batch_size = 500
     success_count = 0
+    skip_count = 0
     error_count = 0
 
     actions = []
     for i, paper in enumerate(papers, 1):
+        paper_id = str(paper.id)
+
+        # 이미 인덱싱되어 있는지 확인
+        try:
+            if client.exists(index='papers', id=paper_id):
+                skip_count += 1
+                continue
+        except Exception as e:
+            pass  # 확인 실패 시 인덱싱 시도
+
         doc = {
             '_index': 'papers',
-            '_id': str(paper.id),
+            '_id': paper_id,
             '_source': {
                 'title_en': paper.title_en or '',
                 'title_kr': paper.title_kr or '',
@@ -169,7 +204,7 @@ def reindex_papers(client):
                 from opensearchpy import helpers
                 helpers.bulk(client, actions)
                 success_count += len(actions)
-                print(f"  진행률: {success_count}/{total} ({success_count/total*100:.1f}%)")
+                print(f"  진행률: 처리 {i}/{total} | 추가 {success_count}건 | 건너뜀 {skip_count}건")
                 actions = []
             except Exception as e:
                 print(f"❌ Bulk 인덱싱 오류: {e}")
@@ -182,35 +217,36 @@ def reindex_papers(client):
             from opensearchpy import helpers
             helpers.bulk(client, actions)
             success_count += len(actions)
-            print(f"  진행률: {success_count}/{total} ({success_count/total*100:.1f}%)")
         except Exception as e:
             print(f"❌ Bulk 인덱싱 오류: {e}")
             error_count += len(actions)
 
     print(f"\n✅ 논문 인덱싱 완료!")
-    print(f"   성공: {success_count:,}건")
+    print(f"   신규 추가: {success_count:,}건")
+    print(f"   기존 데이터 건너뜀: {skip_count:,}건")
     if error_count > 0:
         print(f"   실패: {error_count:,}건")
 
 
 def reindex_reject_documents(client):
-    """거절결정서 데이터 재인덱싱"""
+    """거절결정서 데이터 증분 인덱싱"""
     print("\n" + "="*60)
-    print("거절결정서 데이터 재인덱싱 시작")
+    print("거절결정서 데이터 증분 인덱싱 시작")
     print("="*60)
 
-    # 기존 인덱스 삭제
-    print("\n1️⃣  기존 reject_documents 인덱스 삭제...")
-    delete_index(client, 'reject_documents')
-
-    # 새 인덱스 생성
-    print("\n2️⃣  reject_documents 인덱스 생성...")
-    if not create_reject_documents_index(client):
-        print("⚠️  인덱스 생성 실패 또는 이미 존재함")
-        return
+    # 인덱스가 없으면 생성
+    print("\n1️⃣  reject_documents 인덱스 확인 및 생성...")
+    if not client.indices.exists(index='reject_documents'):
+        print("   인덱스가 없습니다. 새로 생성합니다...")
+        if not create_reject_documents_index(client):
+            print("⚠️  인덱스 생성 실패")
+            return
+        print("✅ 인덱스 생성 완료")
+    else:
+        print("✅ 인덱스가 이미 존재합니다")
 
     # PostgreSQL에서 데이터 읽기
-    print("\n3️⃣  PostgreSQL에서 거절결정서 데이터 읽기...")
+    print("\n2️⃣  PostgreSQL에서 거절결정서 데이터 읽기...")
     docs = RejectDocument.objects.all()
     total = docs.count()
     print(f"총 {total:,}건의 거절결정서 데이터 발견")
@@ -219,17 +255,33 @@ def reindex_reject_documents(client):
         print("⚠️  마이그레이션할 데이터가 없습니다")
         return
 
-    # OpenSearch에 bulk 인덱싱
-    print("\n4️⃣  OpenSearch에 데이터 인덱싱 중...")
+    # 기존 인덱싱된 ID 확인
+    print("\n3️⃣  기존 인덱싱된 데이터 확인 중...")
+    existing_count = client.count(index='reject_documents')['count']
+    print(f"OpenSearch에 이미 {existing_count:,}건 인덱싱됨")
+
+    # OpenSearch에 증분 인덱싱
+    print("\n4️⃣  OpenSearch에 데이터 인덱싱 중 (이미 있는 데이터는 건너뜀)...")
     batch_size = 500
     success_count = 0
+    skip_count = 0
     error_count = 0
 
     actions = []
     for i, doc in enumerate(docs, 1):
+        doc_id = str(doc.id)
+
+        # 이미 인덱싱되어 있는지 확인
+        try:
+            if client.exists(index='reject_documents', id=doc_id):
+                skip_count += 1
+                continue
+        except Exception as e:
+            pass  # 확인 실패 시 인덱싱 시도
+
         action = {
             '_index': 'reject_documents',
-            '_id': str(doc.id),
+            '_id': doc_id,
             '_source': {
                 'doc_id': doc.doc_id or '',
                 'send_number': doc.send_number or '',
@@ -255,7 +307,7 @@ def reindex_reject_documents(client):
                 from opensearchpy import helpers
                 helpers.bulk(client, actions)
                 success_count += len(actions)
-                print(f"  진행률: {success_count}/{total} ({success_count/total*100:.1f}%)")
+                print(f"  진행률: 처리 {i}/{total} | 추가 {success_count}건 | 건너뜀 {skip_count}건")
                 actions = []
             except Exception as e:
                 print(f"❌ Bulk 인덱싱 오류: {e}")
@@ -268,25 +320,26 @@ def reindex_reject_documents(client):
             from opensearchpy import helpers
             helpers.bulk(client, actions)
             success_count += len(actions)
-            print(f"  진행률: {success_count}/{total} ({success_count/total*100:.1f}%)")
         except Exception as e:
             print(f"❌ Bulk 인덱싱 오류: {e}")
             error_count += len(actions)
 
     print(f"\n✅ 거절결정서 인덱싱 완료!")
-    print(f"   성공: {success_count:,}건")
+    print(f"   신규 추가: {success_count:,}건")
+    print(f"   기존 데이터 건너뜀: {skip_count:,}건")
     if error_count > 0:
         print(f"   실패: {error_count:,}건")
 
 
 def main():
     print("="*60)
-    print("Nori 기반 OpenSearch 재인덱싱 스크립트")
+    print("Nori 기반 OpenSearch 증분 인덱싱 스크립트")
     print("="*60)
     print("\n⚠️  주의사항:")
     print("1. AWS Console에서 analysis-nori 패키지를 먼저 연결해야 합니다")
-    print("2. 기존 인덱스를 삭제하고 새로 생성합니다")
-    print("3. PostgreSQL 데이터를 기준으로 재인덱싱합니다")
+    print("2. 인덱스가 없으면 새로 생성합니다")
+    print("3. 이미 인덱싱된 데이터는 건너뜁니다 (증분 업데이트)")
+    print("4. PostgreSQL에 있지만 OpenSearch에 없는 데이터만 추가합니다")
 
     response = input("\n계속하시겠습니까? (yes/no): ")
     if response.lower() != 'yes':
