@@ -236,7 +236,7 @@ def main():
         for index_name in ['patents', 'reject_documents']:
             if client.indices.exists(index=index_name):
                 stats = client.cat.count(index=index_name, format='json')
-                count = stats[0]['count']
+                count = int(stats[0]['count'])
                 print(f"   {index_name}: {count:,}건")
 
     except Exception as e:
