@@ -21,6 +21,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 django.setup()
 
 from patents.models import Patent, RejectDocument
+from papers.models import Paper
 from patents.opensearch_client import get_opensearch_client, create_patents_index, create_papers_index, create_reject_documents_index, delete_index
 
 
@@ -105,6 +106,88 @@ def reindex_patents(client):
             error_count += len(actions)
 
     print(f"\n✅ 특허 인덱싱 완료!")
+    print(f"   성공: {success_count:,}건")
+    if error_count > 0:
+        print(f"   실패: {error_count:,}건")
+
+
+def reindex_papers(client):
+    """논문 데이터 재인덱싱"""
+    print("\n" + "="*60)
+    print("논문 데이터 재인덱싱 시작")
+    print("="*60)
+
+    # 기존 인덱스 삭제
+    print("\n1️⃣  기존 papers 인덱스 삭제...")
+    delete_index(client, 'papers')
+
+    # 새 인덱스 생성 (Nori 기반)
+    print("\n2️⃣  Nori 기반 papers 인덱스 생성...")
+    if not create_papers_index(client):
+        print("⚠️  인덱스 생성 실패 또는 이미 존재함")
+        return
+
+    # PostgreSQL에서 데이터 읽기
+    print("\n3️⃣  PostgreSQL에서 논문 데이터 읽기...")
+    papers = Paper.objects.all()
+    total = papers.count()
+    print(f"총 {total:,}건의 논문 데이터 발견")
+
+    if total == 0:
+        print("⚠️  마이그레이션할 데이터가 없습니다")
+        return
+
+    # OpenSearch에 bulk 인덱싱
+    print("\n4️⃣  OpenSearch에 데이터 인덱싱 중...")
+    batch_size = 500
+    success_count = 0
+    error_count = 0
+
+    actions = []
+    for i, paper in enumerate(papers, 1):
+        doc = {
+            '_index': 'papers',
+            '_id': str(paper.id),
+            '_source': {
+                'title_en': paper.title_en or '',
+                'title_kr': paper.title_kr or '',
+                'authors': paper.authors or '',
+                'abstract_en': paper.abstract_en or '',
+                'abstract_kr': paper.abstract_kr or '',
+                'abstract_page_link': paper.abstract_page_link or '',
+                'pdf_link': paper.pdf_link or '',
+                'source_file': paper.source_file or '',
+                'created_at': paper.created_at.isoformat() if paper.created_at else None,
+                'updated_at': paper.updated_at.isoformat() if paper.updated_at else None
+            }
+        }
+        actions.append(doc)
+
+        # 배치 단위로 bulk 인덱싱
+        if len(actions) >= batch_size:
+            try:
+                from opensearchpy import helpers
+                helpers.bulk(client, actions)
+                success_count += len(actions)
+                print(f"  진행률: {success_count}/{total} ({success_count/total*100:.1f}%)")
+                actions = []
+            except Exception as e:
+                print(f"❌ Bulk 인덱싱 오류: {e}")
+                error_count += len(actions)
+                actions = []
+
+    # 남은 데이터 인덱싱
+    if actions:
+        try:
+            from opensearchpy import helpers
+            helpers.bulk(client, actions)
+            success_count += len(actions)
+            print(f"  진행률: {success_count}/{total} ({success_count/total*100:.1f}%)")
+        except Exception as e:
+            print(f"❌ Bulk 인덱싱 오류: {e}")
+            error_count += len(actions)
+
+    print(f"\n✅ 논문 인덱싱 완료!")
     print(f"   성공: {success_count:,}건")
     if error_count > 0:
         print(f"   실패: {error_count:,}건")
@@ -224,6 +307,9 @@ def main():
         # 특허 재인덱싱
         reindex_patents(client)
 
+        # 논문 재인덱싱
+        reindex_papers(client)
+
         # 거절결정서 재인덱싱
         reindex_reject_documents(client)
 
@@ -233,7 +319,7 @@ def main():
 
         # 최종 통계
         print("\n📊 최종 인덱스 통계:")
-        for index_name in ['patents', 'reject_documents']:
+        for index_name in ['patents', 'papers', 'reject_documents']:
             if client.indices.exists(index=index_name):
                 stats = client.cat.count(index=index_name, format='json')
                 count = int(stats[0]['count'])
