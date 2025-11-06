@@ -122,7 +122,8 @@ class OpenSearchService:
             'query': query,
             'from': from_index,
             'size': page_size,
-            'sort': sort_order
+            'sort': sort_order,
+            'track_total_hits': True  # 정확한 총 개수 추적
         }
 
         response = self.client.search(index='patents', body=body)
@@ -203,7 +204,8 @@ class OpenSearchService:
             'sort': [
                 {'_score': {'order': 'desc'}},  # 관련도순
                 {'created_at': {'order': 'desc'}}  # 생성일 최신순
-            ]
+            ],
+            'track_total_hits': True  # 정확한 총 개수 추적
         }
 
         response = self.client.search(index='papers', body=body)

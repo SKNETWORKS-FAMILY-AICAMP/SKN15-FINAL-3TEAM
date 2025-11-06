@@ -117,19 +117,7 @@ const INITIAL_MESSAGES: Message[] = [
   },
 ]
 
-function highlightText(text: string, keyword: string) {
-  if (!keyword) return text
-  const parts = text.split(new RegExp(`(${keyword})`, "gi"))
-  return parts.map((part, i) =>
-    part.toLowerCase() === keyword.toLowerCase() ? (
-      <mark key={i} className="bg-yellow-200">
-        {part}
-      </mark>
-    ) : (
-      part
-    ),
-  )
-}
+// highlightText 함수 제거됨 - 검색어 하이라이트 기능 비활성화
 
 export default function SearchPage() {
   const [searchType, setSearchType] = useState<"patent" | "paper">("patent")
@@ -464,7 +452,7 @@ export default function SearchPage() {
   }
 
   // 전체 특허 목록 또는 검색 결과 가져오기
-  const fetchPatents = async (keyword: string = '', page: number = 1) => {
+  const fetchPatents = async (keyword: string = '', page: number = 1, customSortBy?: string) => {
     setIsSearching(true)
 
     const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000"
@@ -509,7 +497,9 @@ export default function SearchPage() {
           if (publicationStartDate) requestBody.registration_start_date = publicationStartDate
           if (publicationEndDate) requestBody.registration_end_date = publicationEndDate
           if (legalStatusFilter) requestBody.legal_status = legalStatusFilter
-          if (sortBy) requestBody.sort_by = sortBy  // 정렬 방식 추가 (선택 시에만)
+          // customSortBy가 있으면 우선 사용, 없으면 sortBy state 사용
+          const sortByValue = customSortBy !== undefined ? customSortBy : sortBy
+          if (sortByValue) requestBody.sort_by = sortByValue  // 정렬 방식 추가
         }
 
         response = await fetch(`${API_BASE_URL}${endpoint}/search/`, {
@@ -1134,8 +1124,9 @@ export default function SearchPage() {
                       <select
                         value={sortBy}
                         onChange={(e) => {
-                          setSortBy(e.target.value)
-                          fetchPatents(searchQuery, 1)
+                          const newSortBy = e.target.value
+                          setSortBy(newSortBy)
+                          fetchPatents(searchQuery, 1, newSortBy)
                         }}
                         className="border border-gray-300 rounded-md px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                       >
@@ -1160,7 +1151,7 @@ export default function SearchPage() {
                       className="cursor-pointer"
                     >
                       <div className="flex items-start justify-between mb-2">
-                        <h3 className="text-base font-semibold flex-1">{highlightText(patent.title, searchQuery)}</h3>
+                        <h3 className="text-base font-semibold flex-1">{patent.title}</h3>
                         {searchType === "patent" && patent.legalStatus && (
                           <div className="ml-2 flex-shrink-0">
                             {getLegalStatusBadge(patent.legalStatus)}
@@ -1185,7 +1176,7 @@ export default function SearchPage() {
                       </div>
 
                       <p className="text-sm text-gray-700 line-clamp-3">
-                        {highlightText(patent.summary, searchQuery)}
+                        {patent.summary}
                       </p>
                     </div>
 
