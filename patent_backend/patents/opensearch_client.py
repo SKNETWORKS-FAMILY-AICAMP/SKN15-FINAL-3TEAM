@@ -87,23 +87,14 @@ def create_patents_index(client, index_name='patents'):
         'settings': {
             'index': {
                 'number_of_shards': 2,
-                'number_of_replicas': 1,
-                'analysis': {
-                    'analyzer': {
-                        'korean_analyzer': {
-                            'type': 'custom',
-                            'tokenizer': 'nori_tokenizer',
-                            'filter': ['lowercase', 'nori_readingform']
-                        }
-                    }
-                }
+                'number_of_replicas': 1
             }
         },
         'mappings': {
             'properties': {
                 'title': {
                     'type': 'text',
-                    'analyzer': 'korean_analyzer',
+                    'analyzer': 'standard',
                     'fields': {
                         'keyword': {'type': 'keyword'}
                     }
@@ -123,7 +114,7 @@ def create_patents_index(client, index_name='patents'):
                 },
                 'applicant': {
                     'type': 'text',
-                    'analyzer': 'korean_analyzer',
+                    'analyzer': 'standard',
                     'fields': {
                         'keyword': {'type': 'keyword'}
                     }
@@ -142,11 +133,11 @@ def create_patents_index(client, index_name='patents'):
                 },
                 'abstract': {
                     'type': 'text',
-                    'analyzer': 'korean_analyzer'
+                    'analyzer': 'standard'
                 },
                 'claims': {
                     'type': 'text',
-                    'analyzer': 'korean_analyzer'
+                    'analyzer': 'standard'
                 },
                 'legal_status': {
                     'type': 'keyword'
@@ -180,16 +171,7 @@ def create_papers_index(client, index_name='papers'):
         'settings': {
             'index': {
                 'number_of_shards': 1,
-                'number_of_replicas': 1,
-                'analysis': {
-                    'analyzer': {
-                        'korean_analyzer': {
-                            'type': 'custom',
-                            'tokenizer': 'nori_tokenizer',
-                            'filter': ['lowercase', 'nori_readingform']
-                        }
-                    }
-                }
+                'number_of_replicas': 1
             }
         },
         'mappings': {
@@ -200,14 +182,14 @@ def create_papers_index(client, index_name='papers'):
                 },
                 'title_kr': {
                     'type': 'text',
-                    'analyzer': 'korean_analyzer',
+                    'analyzer': 'standard',
                     'fields': {
                         'keyword': {'type': 'keyword'}
                     }
                 },
                 'authors': {
                     'type': 'text',
-                    'analyzer': 'korean_analyzer',
+                    'analyzer': 'standard',
                     'fields': {
                         'keyword': {'type': 'keyword'}
                     }
@@ -218,7 +200,7 @@ def create_papers_index(client, index_name='papers'):
                 },
                 'abstract_kr': {
                     'type': 'text',
-                    'analyzer': 'korean_analyzer'
+                    'analyzer': 'standard'
                 },
                 'abstract_page_link': {
                     'type': 'keyword',
@@ -260,16 +242,7 @@ def create_reject_documents_index(client, index_name='reject_documents'):
         'settings': {
             'index': {
                 'number_of_shards': 1,
-                'number_of_replicas': 1,
-                'analysis': {
-                    'analyzer': {
-                        'korean_analyzer': {
-                            'type': 'custom',
-                            'tokenizer': 'nori_tokenizer',
-                            'filter': ['lowercase', 'nori_readingform']
-                        }
-                    }
-                }
+                'number_of_replicas': 1
             }
         },
         'mappings': {
@@ -288,36 +261,36 @@ def create_reject_documents_index(client, index_name='reject_documents'):
                 },
                 'applicant': {
                     'type': 'text',
-                    'analyzer': 'korean_analyzer',
+                    'analyzer': 'standard',
                     'fields': {
                         'keyword': {'type': 'keyword'}
                     }
                 },
                 'agent': {
                     'type': 'text',
-                    'analyzer': 'korean_analyzer'
+                    'analyzer': 'standard'
                 },
                 'application_number': {
                     'type': 'keyword'
                 },
                 'invention_name': {
                     'type': 'text',
-                    'analyzer': 'korean_analyzer'
+                    'analyzer': 'standard'
                 },
                 'examination_office': {
                     'type': 'text',
-                    'analyzer': 'korean_analyzer'
+                    'analyzer': 'standard'
                 },
                 'examiner': {
                     'type': 'keyword'
                 },
                 'tables_raw': {
                     'type': 'text',
-                    'analyzer': 'korean_analyzer'
+                    'analyzer': 'standard'
                 },
                 'processed_text': {
                     'type': 'text',
-                    'analyzer': 'korean_analyzer'
+                    'analyzer': 'standard'
                 },
                 'created_at': {
                     'type': 'date'
