@@ -11,7 +11,7 @@ class OpenSearchService:
     def __init__(self):
         self.client = get_opensearch_client()
 
-    def search_patents(self, keyword, search_fields=None, filters=None, page=1, page_size=10):
+    def search_patents(self, keyword, search_fields=None, filters=None, page=1, page_size=10, sort_by='date_desc'):
         """
         특허 검색
 
@@ -21,6 +21,7 @@ class OpenSearchService:
             filters: 필터 조건 딕셔너리
             page: 페이지 번호 (1부터 시작)
             page_size: 페이지당 결과 수
+            sort_by: 정렬 방식 ('date_desc'=최신순, 'date_asc'=오래된순)
 
         Returns:
             dict: 검색 결과 및 메타데이터
@@ -102,24 +103,26 @@ class OpenSearchService:
         # 페이지네이션
         from_index = (page - 1) * page_size
 
+        # 정렬 방식 설정
+        if sort_by == 'date_asc':
+            # 오래된순
+            sort_order = [
+                {'application_date': {'order': 'asc'}},
+                {'_score': {'order': 'desc'}}
+            ]
+        else:
+            # 최신순 (기본값)
+            sort_order = [
+                {'application_date': {'order': 'desc'}},
+                {'_score': {'order': 'desc'}}
+            ]
+
         # OpenSearch 검색 실행
         body = {
             'query': query,
             'from': from_index,
             'size': page_size,
-            'sort': [
-                {'_score': {'order': 'desc'}},  # 관련도순
-                {'application_date': {'order': 'desc'}}  # 출원일 최신순
-            ],
-            'highlight': {
-                'fields': {
-                    'title': {},
-                    'abstract': {},
-                    'claims': {}
-                },
-                'pre_tags': ['<mark>'],
-                'post_tags': ['</mark>']
-            }
+            'sort': sort_order
         }
 
         response = self.client.search(index='patents', body=body)
@@ -146,8 +149,7 @@ class OpenSearchService:
                 'abstract': source.get('abstract'),
                 'claims': source.get('claims'),
                 'legal_status': source.get('legal_status'),
-                'score': hit['_score'],
-                'highlight': hit.get('highlight', {})
+                'score': hit['_score']
             }
             results.append(result)
 
@@ -201,15 +203,7 @@ class OpenSearchService:
             'sort': [
                 {'_score': {'order': 'desc'}},  # 관련도순
                 {'created_at': {'order': 'desc'}}  # 생성일 최신순
-            ],
-            'highlight': {
-                'fields': {
-                    'title_kr': {},
-                    'abstract_kr': {}
-                },
-                'pre_tags': ['<mark>'],
-                'post_tags': ['</mark>']
-            }
+            ]
         }
 
         response = self.client.search(index='papers', body=body)
@@ -232,8 +226,7 @@ class OpenSearchService:
                 'abstract_page_link': source.get('abstract_page_link'),
                 'pdf_link': source.get('pdf_link'),
                 'source_file': source.get('source_file'),
-                'score': hit['_score'],
-                'highlight': hit.get('highlight', {})
+                'score': hit['_score']
             }
             results.append(result)
 

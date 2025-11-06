@@ -144,7 +144,7 @@ export default function SearchPage() {
   const [publicationStartDate, setPublicationStartDate] = useState("")
   const [publicationEndDate, setPublicationEndDate] = useState("")
   const [legalStatusFilter, setLegalStatusFilter] = useState("")
-  const [sortBy, setSortBy] = useState("latest")
+  const [sortBy, setSortBy] = useState("date_desc")
   const [currentPage, setCurrentPage] = useState(1)
   const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES)
   const [inputMessage, setInputMessage] = useState("")
@@ -509,7 +509,7 @@ export default function SearchPage() {
           if (publicationStartDate) requestBody.registration_start_date = publicationStartDate
           if (publicationEndDate) requestBody.registration_end_date = publicationEndDate
           if (legalStatusFilter) requestBody.legal_status = legalStatusFilter
-          requestBody.sort_by = sortBy  // 정렬 방식 추가
+          if (sortBy) requestBody.sort_by = sortBy  // 정렬 방식 추가 (선택 시에만)
         }
 
         response = await fetch(`${API_BASE_URL}${endpoint}/search/`, {
@@ -1084,18 +1084,6 @@ export default function SearchPage() {
                       </select>
                     </div>
 
-                    <div>
-                      <label className="text-xs text-gray-600 mb-1 block">정렬 방식</label>
-                      <select
-                        value={sortBy}
-                        onChange={(e) => setSortBy(e.target.value)}
-                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="latest">최신순</option>
-                        <option value="oldest">오래된순</option>
-                      </select>
-                    </div>
-
                   </div>
                 )}
                 </div>
@@ -1138,9 +1126,24 @@ export default function SearchPage() {
                   backgroundColor: 'rgba(249, 250, 251, 0.3)',
                   borderBottom: '1px solid rgba(229, 231, 235, 0.2)'
                 }}>
-                  <p className="text-sm text-gray-600">
-                    {searchType === "patent" ? "특허" : "논문"} 총 {totalCount.toLocaleString()}건 검색됨
-                  </p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-gray-600">
+                      {searchType === "patent" ? "특허" : "논문"} 총 {totalCount.toLocaleString()}건 검색됨
+                    </p>
+                    {searchType === "patent" && (
+                      <select
+                        value={sortBy}
+                        onChange={(e) => {
+                          setSortBy(e.target.value)
+                          fetchPatents(searchQuery, 1)
+                        }}
+                        className="border border-gray-300 rounded-md px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                      >
+                        <option value="date_desc">최신순</option>
+                        <option value="date_asc">오래된순</option>
+                      </select>
+                    )}
+                  </div>
                 </div>
               )}
 

@@ -81,7 +81,7 @@ def get_opensearch_client():
 
 def create_patents_index(client, index_name='patents'):
     """
-    특허 인덱스 생성 (한글 검색 최적화 + 동의어 사전)
+    특허 인덱스 생성 (Nori 형태소 분석기 사용)
     """
     index_body = {
         'settings': {
@@ -91,57 +91,21 @@ def create_patents_index(client, index_name='patents'):
             },
             'analysis': {
                 'filter': {
-                    'synonym_filter': {
-                        'type': 'synonym',
-                        'synonyms': [
-                            # AI/인공지능 관련
-                            '인공지능, AI, artificial intelligence, 인공 지능',
-                            '머신러닝, machine learning, ML, 기계학습, 기계 학습',
-                            '딥러닝, deep learning, DL, 심층학습, 심층 학습',
-                            '신경망, neural network, NN',
-
-                            # IoT/사물인터넷
-                            'IoT, 사물인터넷, Internet of Things, 사물 인터넷',
-
-                            # 블록체인
-                            '블록체인, blockchain, 블록 체인',
-
-                            # 자율주행
-                            '자율주행, autonomous driving, self-driving, 자율 주행',
-
-                            # 빅데이터
-                            '빅데이터, big data, 빅 데이터',
-
-                            # 클라우드
-                            '클라우드, cloud computing, 클라우드 컴퓨팅',
-
-                            # 로봇
-                            '로봇, robot, 로보틱스, robotics',
-
-                            # 드론
-                            '드론, drone, UAV, 무인항공기',
-
-                            # VR/AR
-                            'VR, 가상현실, virtual reality, 가상 현실',
-                            'AR, 증강현실, augmented reality, 증강 현실',
-
-                            # 반도체
-                            '반도체, semiconductor, 세미컨덕터',
-
-                            # 배터리
-                            '배터리, battery, 전지',
-
-                            # 5G/6G
-                            '5G, 5세대, 5세대 이동통신',
-                            '6G, 6세대, 6세대 이동통신'
+                    'nori_posfilter': {
+                        'type': 'nori_part_of_speech',
+                        'stoptags': [
+                            'E', 'IC', 'J', 'MAG', 'MAJ', 'MM',
+                            'SP', 'SSC', 'SSO', 'SC', 'SE',
+                            'XPN', 'XSA', 'XSN', 'XSV',
+                            'UNA', 'NA', 'VSV'
                         ]
                     }
                 },
                 'analyzer': {
-                    'synonym_analyzer': {
+                    'nori_korean_analyzer': {
                         'type': 'custom',
-                        'tokenizer': 'standard',
-                        'filter': ['lowercase', 'synonym_filter']
+                        'tokenizer': 'nori_tokenizer',
+                        'filter': ['nori_posfilter', 'lowercase', 'nori_readingform']
                     }
                 }
             }
@@ -150,14 +114,14 @@ def create_patents_index(client, index_name='patents'):
             'properties': {
                 'title': {
                     'type': 'text',
-                    'analyzer': 'synonym_analyzer',
+                    'analyzer': 'nori_korean_analyzer',
                     'fields': {
                         'keyword': {'type': 'keyword'}
                     }
                 },
                 'title_en': {
                     'type': 'text',
-                    'analyzer': 'synonym_analyzer',
+                    'analyzer': 'standard',
                     'fields': {
                         'keyword': {'type': 'keyword'}
                     }
@@ -170,7 +134,7 @@ def create_patents_index(client, index_name='patents'):
                 },
                 'applicant': {
                     'type': 'text',
-                    'analyzer': 'synonym_analyzer',
+                    'analyzer': 'nori_korean_analyzer',
                     'fields': {
                         'keyword': {'type': 'keyword'}
                     }
@@ -189,11 +153,11 @@ def create_patents_index(client, index_name='patents'):
                 },
                 'abstract': {
                     'type': 'text',
-                    'analyzer': 'synonym_analyzer'
+                    'analyzer': 'nori_korean_analyzer'
                 },
                 'claims': {
                     'type': 'text',
-                    'analyzer': 'synonym_analyzer'
+                    'analyzer': 'nori_korean_analyzer'
                 },
                 'legal_status': {
                     'type': 'keyword'
@@ -221,7 +185,7 @@ def create_patents_index(client, index_name='patents'):
 
 def create_papers_index(client, index_name='papers'):
     """
-    논문 인덱스 생성 (한글/영문 검색 최적화 + 동의어 사전)
+    논문 인덱스 생성 (Nori 형태소 분석기 사용)
     """
     index_body = {
         'settings': {
@@ -231,57 +195,21 @@ def create_papers_index(client, index_name='papers'):
             },
             'analysis': {
                 'filter': {
-                    'synonym_filter': {
-                        'type': 'synonym',
-                        'synonyms': [
-                            # AI/인공지능 관련
-                            '인공지능, AI, artificial intelligence, 인공 지능',
-                            '머신러닝, machine learning, ML, 기계학습, 기계 학습',
-                            '딥러닝, deep learning, DL, 심층학습, 심층 학습',
-                            '신경망, neural network, NN',
-
-                            # IoT/사물인터넷
-                            'IoT, 사물인터넷, Internet of Things, 사물 인터넷',
-
-                            # 블록체인
-                            '블록체인, blockchain, 블록 체인',
-
-                            # 자율주행
-                            '자율주행, autonomous driving, self-driving, 자율 주행',
-
-                            # 빅데이터
-                            '빅데이터, big data, 빅 데이터',
-
-                            # 클라우드
-                            '클라우드, cloud computing, 클라우드 컴퓨팅',
-
-                            # 로봇
-                            '로봇, robot, 로보틱스, robotics',
-
-                            # 드론
-                            '드론, drone, UAV, 무인항공기',
-
-                            # VR/AR
-                            'VR, 가상현실, virtual reality, 가상 현실',
-                            'AR, 증강현실, augmented reality, 증강 현실',
-
-                            # 반도체
-                            '반도체, semiconductor, 세미컨덕터',
-
-                            # 배터리
-                            '배터리, battery, 전지',
-
-                            # 5G/6G
-                            '5G, 5세대, 5세대 이동통신',
-                            '6G, 6세대, 6세대 이동통신'
+                    'nori_posfilter': {
+                        'type': 'nori_part_of_speech',
+                        'stoptags': [
+                            'E', 'IC', 'J', 'MAG', 'MAJ', 'MM',
+                            'SP', 'SSC', 'SSO', 'SC', 'SE',
+                            'XPN', 'XSA', 'XSN', 'XSV',
+                            'UNA', 'NA', 'VSV'
                         ]
                     }
                 },
                 'analyzer': {
-                    'synonym_analyzer': {
+                    'nori_korean_analyzer': {
                         'type': 'custom',
-                        'tokenizer': 'standard',
-                        'filter': ['lowercase', 'synonym_filter']
+                        'tokenizer': 'nori_tokenizer',
+                        'filter': ['nori_posfilter', 'lowercase', 'nori_readingform']
                     }
                 }
             }
@@ -290,29 +218,29 @@ def create_papers_index(client, index_name='papers'):
             'properties': {
                 'title_en': {
                     'type': 'text',
-                    'analyzer': 'synonym_analyzer'
+                    'analyzer': 'standard'
                 },
                 'title_kr': {
                     'type': 'text',
-                    'analyzer': 'synonym_analyzer',
+                    'analyzer': 'nori_korean_analyzer',
                     'fields': {
                         'keyword': {'type': 'keyword'}
                     }
                 },
                 'authors': {
                     'type': 'text',
-                    'analyzer': 'synonym_analyzer',
+                    'analyzer': 'nori_korean_analyzer',
                     'fields': {
                         'keyword': {'type': 'keyword'}
                     }
                 },
                 'abstract_en': {
                     'type': 'text',
-                    'analyzer': 'synonym_analyzer'
+                    'analyzer': 'standard'
                 },
                 'abstract_kr': {
                     'type': 'text',
-                    'analyzer': 'synonym_analyzer'
+                    'analyzer': 'nori_korean_analyzer'
                 },
                 'abstract_page_link': {
                     'type': 'keyword',
