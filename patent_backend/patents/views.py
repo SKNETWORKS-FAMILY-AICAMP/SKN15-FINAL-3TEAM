@@ -1,13 +1,12 @@
 """
 특허 검색 API Views
-PostgreSQL Full-Text Search 사용
+OpenSearch 사용
 """
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from django.contrib.postgres.search import SearchQuery, SearchRank, SearchVector
-from django.db.models import Q, F
+from django.db.models import Q
 from .models import Patent, RejectDocument, OpinionDocument
 from .serializers import (
     PatentSerializer,
@@ -17,6 +16,7 @@ from .serializers import (
     OpinionDocumentSerializer
 )
 from .pagination import CustomPageNumberPagination
+from .opensearch_service import OpenSearchService
 import logging
 
 logger = logging.getLogger(__name__)
@@ -43,8 +43,8 @@ class PatentViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['get', 'post'], url_path='search')
     def search(self, request):
         """
-        특허 키워드 검색
-        
+        특허 키워드 검색 (OpenSearch 사용)
+
         GET /api/patents/search/?keyword=인공지능
         POST /api/patents/search/ {"keyword": "인공지능"}
         """
@@ -53,13 +53,13 @@ class PatentViewSet(viewsets.ReadOnlyModelViewSet):
             serializer = PatentSearchSerializer(data=request.query_params)
         else:
             serializer = PatentSearchSerializer(data=request.data)
-        
+
         if not serializer.is_valid():
             return Response(
                 serializer.errors,
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         keyword = serializer.validated_data['keyword']
         search_fields = serializer.validated_data.get('search_fields', ['title', 'abstract', 'claims'])
         page = serializer.validated_data.get('page', 1)
@@ -70,106 +70,52 @@ class PatentViewSet(viewsets.ReadOnlyModelViewSet):
         registration_start_date = serializer.validated_data.get('registration_start_date', '')
         registration_end_date = serializer.validated_data.get('registration_end_date', '')
         legal_status = serializer.validated_data.get('legal_status', '')
-        sort_by = serializer.validated_data.get('sort_by', 'latest')
+        sort_by = serializer.validated_data.get('sort_by', 'date_desc')
 
         try:
-            # 키워드가 비어있는 경우 (필터만 사용)
-            if not keyword or keyword.strip() == '':
-                # 필터만 적용하여 전체 데이터 조회
-                results = Patent.objects.all()
-            else:
-                # PostgreSQL Full-Text Search
-                query = SearchQuery(keyword, config='simple')  # 한글은 'simple' 사용
+            # OpenSearch 서비스 사용
+            opensearch_service = OpenSearchService()
 
-                # 검색 벡터 생성 (동적으로 필드 선택)
-                search_vector = None
-                if 'title' in search_fields:
-                    search_vector = SearchVector('title', weight='A')
-                if 'abstract' in search_fields:
-                    if search_vector:
-                        search_vector += SearchVector('abstract', weight='B')
-                    else:
-                        search_vector = SearchVector('abstract', weight='B')
-                if 'claims' in search_fields:
-                    if search_vector:
-                        search_vector += SearchVector('claims', weight='C')
-                    else:
-                        search_vector = SearchVector('claims', weight='C')
-
-                # 검색 필드가 하나도 선택되지 않은 경우 기본값 사용
-                if not search_vector:
-                    search_vector = SearchVector('title', weight='A')
-
-                # 검색 실행 및 랭킹
-                results = Patent.objects.annotate(
-                    rank=SearchRank(search_vector, query)
-                ).filter(
-                    rank__gte=0.001  # 최소 관련도 필터
-                )
-
-            # 고급 필터 적용
+            # 필터 구성
+            filters = {}
             if ipc_code:
-                results = results.filter(
-                    Q(ipc_code__icontains=ipc_code) | Q(cpc_code__icontains=ipc_code)
-                )
-
+                filters['ipc_code'] = ipc_code
             if application_start_date:
-                # 날짜 형식 정규화 (YYYY-MM-DD -> YYYY.MM.DD, DB 형식에 맞춤)
-                app_start = application_start_date.replace('-', '.')
-                results = results.filter(application_date__gte=app_start)
-
+                filters['application_start_date'] = application_start_date.replace('-', '.')
             if application_end_date:
-                app_end = application_end_date.replace('-', '.')
-                results = results.filter(application_date__lte=app_end)
-
+                filters['application_end_date'] = application_end_date.replace('-', '.')
             if registration_start_date:
-                reg_start = registration_start_date.replace('-', '.')
-                results = results.filter(registration_date__gte=reg_start)
-
+                filters['registration_start_date'] = registration_start_date.replace('-', '.')
             if registration_end_date:
-                reg_end = registration_end_date.replace('-', '.')
-                results = results.filter(registration_date__lte=reg_end)
-
+                filters['registration_end_date'] = registration_end_date.replace('-', '.')
             if legal_status:
-                results = results.filter(legal_status__icontains=legal_status)
+                filters['legal_status'] = legal_status
 
-            # 정렬 처리
-            date_order = 'application_date' if sort_by == 'oldest' else '-application_date'
-
-            if keyword and keyword.strip():
-                # 키워드 검색 시: 랭킹 + 날짜순
-                results = results.order_by('-rank', date_order)
-            else:
-                # 필터만 사용 시: 날짜순만
-                results = results.order_by(date_order)
-            
-            # 페이지네이션
-            total_count = results.count()
-            total_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 1
-
-            # 페이지 범위 검증
-            if page < 1:
-                page = 1
-            elif total_count > 0 and page > total_pages:
-                page = total_pages
-
-            start = (page - 1) * page_size
-            end = start + page_size
-            paginated_results = results[start:end]
+            # OpenSearch 검색 실행
+            search_result = opensearch_service.search_patents(
+                keyword=keyword if keyword else '',
+                search_fields=search_fields,
+                filters=filters if filters else None,
+                page=page,
+                page_size=page_size,
+                sort_by=sort_by
+            )
 
             # 응답 데이터 구성
-            result_serializer = PatentListSerializer(paginated_results, many=True)
+            response_data = {
+                'results': search_result['results'],
+                'total_count': search_result['total_count'],
+                'total_pages': search_result['total_pages'],
+                'current_page': search_result['current_page'],
+                'page_size': search_result['page_size']
+            }
 
             return Response({
                 'success': True,
                 'keyword': keyword,
-                'total_count': total_count,
-                'page': page,
-                'page_size': page_size,
-                'total_pages': total_pages,
-                'results': result_serializer.data
+                **response_data
             })
-            
+
         except Exception as e:
             logger.error(f"특허 검색 오류: {str(e)}")
             return Response(
