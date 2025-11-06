@@ -105,16 +105,16 @@ class OpenSearchService:
 
         # 정렬 방식 설정
         if sort_by == 'date_asc':
-            # 오래된순
+            # 관련도순 + 오래된순
             sort_order = [
-                {'application_date': {'order': 'asc'}},
-                {'_score': {'order': 'desc'}}
+                {'_score': {'order': 'desc'}},
+                {'application_date': {'order': 'asc'}}
             ]
         else:
-            # 최신순 (기본값)
+            # 관련도순 + 최신순 (기본값)
             sort_order = [
-                {'application_date': {'order': 'desc'}},
-                {'_score': {'order': 'desc'}}
+                {'_score': {'order': 'desc'}},
+                {'application_date': {'order': 'desc'}}
             ]
 
         # OpenSearch 검색 실행
