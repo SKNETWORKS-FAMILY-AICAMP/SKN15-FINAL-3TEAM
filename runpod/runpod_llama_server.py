@@ -8,9 +8,13 @@ RunPod 설정:
 3. 포트: 8000 (HTTP)
 
 환경 변수:
-- MODEL_NAME: 사용할 모델 (기본: meta-llama/Llama-3.2-3B-Instruct)
+- MODEL_NAME: 사용할 모델 (기본: microsoft/Phi-3-mini-4k-instruct)
 - MAX_TOKENS: 최대 생성 토큰 (기본: 512)
 - TEMPERATURE: 생성 온도 (기본: 0.7)
+
+지원 모델:
+- microsoft/Phi-3-mini-4k-instruct (3.8B, 인증 불필요)
+- meta-llama/Llama-3.2-3B-Instruct (인증 필요 - Hugging Face 로그인 & 승인)
 
 실행:
 python runpod_llama_server.py
@@ -55,7 +59,7 @@ tokenizer = None
 device = None
 
 # 환경 변수로 설정 가능
-MODEL_NAME = os.getenv("MODEL_NAME", "meta-llama/Llama-3.2-3B-Instruct")
+MODEL_NAME = os.getenv("MODEL_NAME", "microsoft/Phi-3-mini-4k-instruct")
 MAX_MODEL_TOKENS = int(os.getenv("MAX_TOKENS", "512"))
 DEFAULT_TEMPERATURE = float(os.getenv("TEMPERATURE", "0.7"))
 

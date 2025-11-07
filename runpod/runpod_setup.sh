@@ -29,7 +29,7 @@ echo "✅ 패키지 설치 완료"
 
 # 환경 변수 설정 (선택)
 echo "3/4: 환경 변수 설정..."
-export MODEL_NAME="meta-llama/Llama-3.2-3B-Instruct"
+export MODEL_NAME="microsoft/Phi-3-mini-4k-instruct"  # 인증 불필요
 export MAX_TOKENS=512
 export TEMPERATURE=0.7
 export PORT=8000
