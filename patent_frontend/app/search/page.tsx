@@ -489,6 +489,10 @@ export default function SearchPage() {
           page_size: 10
         }
 
+        // 정렬 방식 추가 (특허 및 논문 공통)
+        const sortByValue = customSortBy !== undefined ? customSortBy : sortBy
+        if (sortByValue) requestBody.sort_by = sortByValue
+
         // 특허 전용 고급 필터
         if (searchType === "patent") {
           if (ipcCode) requestBody.ipc_code = ipcCode
@@ -497,9 +501,6 @@ export default function SearchPage() {
           if (publicationStartDate) requestBody.registration_start_date = publicationStartDate
           if (publicationEndDate) requestBody.registration_end_date = publicationEndDate
           if (legalStatusFilter) requestBody.legal_status = legalStatusFilter
-          // customSortBy가 있으면 우선 사용, 없으면 sortBy state 사용
-          const sortByValue = customSortBy !== undefined ? customSortBy : sortBy
-          if (sortByValue) requestBody.sort_by = sortByValue  // 정렬 방식 추가
         }
 
         response = await fetch(`${API_BASE_URL}${endpoint}/search/`, {
