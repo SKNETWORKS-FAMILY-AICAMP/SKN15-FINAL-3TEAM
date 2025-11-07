@@ -130,7 +130,8 @@ def create_patents_index(client, index_name='patents'):
                     'type': 'keyword'
                 },
                 'application_date': {
-                    'type': 'keyword'
+                    'type': 'date',
+                    'format': 'yyyy.MM.dd||yyyy-MM-dd||yyyyMMdd||epoch_millis'
                 },
                 'applicant': {
                     'type': 'text',
@@ -143,7 +144,8 @@ def create_patents_index(client, index_name='patents'):
                     'type': 'keyword'
                 },
                 'registration_date': {
-                    'type': 'keyword'
+                    'type': 'date',
+                    'format': 'yyyy.MM.dd||yyyy-MM-dd||yyyyMMdd||epoch_millis'
                 },
                 'ipc_code': {
                     'type': 'keyword'

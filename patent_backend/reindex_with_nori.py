@@ -27,24 +27,28 @@ from patents.opensearch_client import get_opensearch_client, create_patents_inde
 
 
 def reindex_patents(client):
-    """특허 데이터 증분 인덱싱"""
+    """특허 데이터 전체 재인덱싱 (날짜 타입 수정 반영)"""
     print("\n" + "="*60)
-    print("특허 데이터 증분 인덱싱 시작")
+    print("특허 데이터 전체 재인덱싱 시작")
     print("="*60)
 
-    # 인덱스가 없으면 생성 (Nori 기반)
-    print("\n1️⃣  patents 인덱스 확인 및 생성...")
-    if not client.indices.exists(index='patents'):
-        print("   인덱스가 없습니다. 새로 생성합니다...")
-        if not create_patents_index(client):
-            print("⚠️  인덱스 생성 실패")
-            return
-        print("✅ 인덱스 생성 완료")
+    # 기존 인덱스 삭제 (날짜 타입 변경을 위해 필수)
+    print("\n1️⃣  기존 patents 인덱스 삭제 중...")
+    if client.indices.exists(index='patents'):
+        delete_index(client, 'patents')
+        print("✅ 기존 인덱스 삭제 완료")
     else:
-        print("✅ 인덱스가 이미 존재합니다")
+        print("✅ 삭제할 인덱스가 없습니다")
+
+    # 새 인덱스 생성 (Nori 기반, 날짜 타입 포함)
+    print("\n2️⃣  새로운 patents 인덱스 생성...")
+    if not create_patents_index(client):
+        print("⚠️  인덱스 생성 실패")
+        return
+    print("✅ 인덱스 생성 완료")
 
     # PostgreSQL에서 데이터 읽기
-    print("\n2️⃣  PostgreSQL에서 특허 데이터 읽기...")
+    print("\n3️⃣  PostgreSQL에서 특허 데이터 읽기...")
     patents = Patent.objects.all()
     total = patents.count()
     print(f"총 {total:,}건의 특허 데이터 발견")
@@ -53,29 +57,15 @@ def reindex_patents(client):
         print("⚠️  마이그레이션할 데이터가 없습니다")
         return
 
-    # 기존 인덱싱된 ID 확인
-    print("\n3️⃣  기존 인덱싱된 데이터 확인 중...")
-    existing_count = client.count(index='patents')['count']
-    print(f"OpenSearch에 이미 {existing_count:,}건 인덱싱됨")
-
-    # OpenSearch에 증분 인덱싱
-    print("\n4️⃣  OpenSearch에 데이터 인덱싱 중 (이미 있는 데이터는 건너뜀)...")
+    # OpenSearch에 전체 재인덱싱
+    print("\n4️⃣  OpenSearch에 데이터 인덱싱 중...")
     batch_size = 500
     success_count = 0
-    skip_count = 0
     error_count = 0
 
     actions = []
     for i, patent in enumerate(patents, 1):
         patent_id = str(patent.id)
-
-        # 이미 인덱싱되어 있는지 확인
-        try:
-            if client.exists(index='patents', id=patent_id):
-                skip_count += 1
-                continue
-        except Exception as e:
-            pass  # 확인 실패 시 인덱싱 시도
 
         doc = {
             '_index': 'patents',

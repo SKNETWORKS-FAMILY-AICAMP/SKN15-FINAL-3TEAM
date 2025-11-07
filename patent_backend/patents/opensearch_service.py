@@ -33,15 +33,15 @@ class OpenSearchService:
         # 검색 쿼리 구성
         must_queries = []
 
-        # 키워드 검색 (multi_match with fuzziness)
+        # 키워드 검색 (정확한 매칭, 모든 단어 포함)
         if keyword:
             must_queries.append({
                 'multi_match': {
                     'query': keyword,
                     'fields': search_fields,
                     'type': 'best_fields',
-                    'operator': 'or',
-                    'fuzziness': 'AUTO'  # 오타 허용 (1-2글자)
+                    'operator': 'and'  # 모든 단어 포함 필요
+                    # fuzziness 제거 - 정확한 매칭만
                 }
             })
 
@@ -124,7 +124,8 @@ class OpenSearchService:
             'size': page_size,
             'sort': sort_order,
             'track_total_hits': True,  # 정확한 총 개수 추적
-            'min_score': 2.5 if keyword else 0  # 키워드 검색 시 최소 관련도 점수 (관련 없는 결과 필터링)
+            # min_score 임시 비활성화 - 점수 확인 후 적절한 값 설정 필요
+            # 'min_score': 2.5 if keyword else 0
         }
 
         response = self.client.search(index='patents', body=body)
@@ -186,15 +187,15 @@ class OpenSearchService:
         if not search_fields:
             search_fields = ['title_kr', 'abstract_kr']
 
-        # 검색 쿼리 구성
+        # 검색 쿼리 구성 (정확한 매칭, 모든 단어 포함)
         if keyword:
             query = {
                 'multi_match': {
                     'query': keyword,
                     'fields': search_fields,
                     'type': 'best_fields',
-                    'operator': 'or',
-                    'fuzziness': 'AUTO'  # 오타 허용 (1-2글자)
+                    'operator': 'and'  # 모든 단어 포함 필요
+                    # fuzziness 제거 - 정확한 매칭만
                 }
             }
         else:
@@ -213,7 +214,8 @@ class OpenSearchService:
                 {'created_at': {'order': 'desc'}}  # 생성일 최신순
             ],
             'track_total_hits': True,  # 정확한 총 개수 추적
-            'min_score': 2.5 if keyword else 0  # 키워드 검색 시 최소 관련도 점수 (관련 없는 결과 필터링)
+            # min_score 임시 비활성화 - 점수 확인 후 적절한 값 설정 필요
+            # 'min_score': 2.5 if keyword else 0
         }
 
         response = self.client.search(index='papers', body=body)
