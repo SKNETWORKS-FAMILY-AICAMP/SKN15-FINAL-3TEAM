@@ -465,7 +465,8 @@ export default function SearchPage() {
       // 검색 API를 사용할 조건: 키워드가 있거나 필터가 있을 때
       const hasSearchParams = keyword.trim() ||
         (searchType === "patent" && (ipcCode || applicationStartDate || applicationEndDate ||
-         publicationStartDate || publicationEndDate || legalStatusFilter))
+         publicationStartDate || publicationEndDate || legalStatusFilter)) ||
+        (searchType === "paper" && (applicationStartDate || applicationEndDate))
 
       if (hasSearchParams) {
         // 키워드 검색 또는 필터 검색

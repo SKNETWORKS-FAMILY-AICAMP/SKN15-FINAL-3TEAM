@@ -46,9 +46,11 @@ class PaperSearchSerializer(serializers.Serializer):
     """검색 요청 Serializer"""
 
     keyword = serializers.CharField(
-        required=True,
+        required=False,
+        allow_blank=True,
         max_length=200,
-        help_text='검색 키워드'
+        default='',
+        help_text='검색 키워드 (선택사항, 필터만 사용 가능)'
     )
     search_fields = serializers.ListField(
         child=serializers.CharField(),

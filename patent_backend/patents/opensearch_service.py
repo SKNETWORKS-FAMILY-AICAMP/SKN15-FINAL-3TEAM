@@ -93,12 +93,24 @@ class OpenSearchService:
                 })
 
         # 최종 쿼리 구성
-        query = {
-            'bool': {
-                'must': must_queries if must_queries else {'match_all': {}},
-                'filter': filter_queries
+        if must_queries:
+            query = {
+                'bool': {
+                    'must': must_queries,
+                    'filter': filter_queries
+                }
             }
-        }
+        elif filter_queries:
+            # 키워드 없이 필터만 있는 경우
+            query = {
+                'bool': {
+                    'must': {'match_all': {}},
+                    'filter': filter_queries
+                }
+            }
+        else:
+            # 키워드도 필터도 없는 경우
+            query = {'match_all': {}}
 
         # 페이지네이션
         from_index = (page - 1) * page_size
@@ -222,12 +234,24 @@ class OpenSearchService:
                 })
 
         # 최종 쿼리 구성
-        query = {
-            'bool': {
-                'must': must_queries if must_queries else {'match_all': {}},
-                'filter': filter_queries
+        if must_queries:
+            query = {
+                'bool': {
+                    'must': must_queries,
+                    'filter': filter_queries
+                }
             }
-        }
+        elif filter_queries:
+            # 키워드 없이 필터만 있는 경우
+            query = {
+                'bool': {
+                    'must': {'match_all': {}},
+                    'filter': filter_queries
+                }
+            }
+        else:
+            # 키워드도 필터도 없는 경우
+            query = {'match_all': {}}
 
         # 페이지네이션
         from_index = (page - 1) * page_size
