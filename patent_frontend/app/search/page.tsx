@@ -132,8 +132,6 @@ export default function SearchPage() {
   const [ipcCode, setIpcCode] = useState("")
   const [applicationStartDate, setApplicationStartDate] = useState("")
   const [applicationEndDate, setApplicationEndDate] = useState("")
-  const [publicationStartDate, setPublicationStartDate] = useState("")
-  const [publicationEndDate, setPublicationEndDate] = useState("")
   const [legalStatusFilter, setLegalStatusFilter] = useState("")
   const [sortBy, setSortBy] = useState("date_desc")
   const [currentPage, setCurrentPage] = useState(1)
@@ -467,8 +465,7 @@ export default function SearchPage() {
 
       // 검색 API를 사용할 조건: 키워드가 있거나 필터가 있을 때
       const hasSearchParams = keyword.trim() ||
-        (searchType === "patent" && (ipcCode || applicationStartDate || applicationEndDate ||
-         publicationStartDate || publicationEndDate || legalStatusFilter)) ||
+        (searchType === "patent" && (ipcCode || applicationStartDate || applicationEndDate || legalStatusFilter)) ||
         (searchType === "paper" && (applicationStartDate || applicationEndDate))
 
       if (hasSearchParams) {
@@ -503,8 +500,6 @@ export default function SearchPage() {
           if (ipcCode) requestBody.ipc_code = ipcCode
           if (applicationStartDate) requestBody.application_start_date = applicationStartDate
           if (applicationEndDate) requestBody.application_end_date = applicationEndDate
-          if (publicationStartDate) requestBody.registration_start_date = publicationStartDate
-          if (publicationEndDate) requestBody.registration_end_date = publicationEndDate
           if (legalStatusFilter) requestBody.legal_status = legalStatusFilter
         } else {
           // 논문 전용 필터 (발행일 범위)
@@ -521,8 +516,9 @@ export default function SearchPage() {
           body: JSON.stringify(requestBody)
         })
       } else {
-        // 전체 목록 조회
-        response = await fetch(`${API_BASE_URL}${endpoint}/?page=${page}&page_size=10`, {
+        // 전체 목록 조회 (정렬 적용)
+        const sortByValue = customSortBy !== undefined ? customSortBy : sortBy
+        response = await fetch(`${API_BASE_URL}${endpoint}/?page=${page}&page_size=10&sort_by=${sortByValue}`, {
           headers: {
             ...(token && { 'Authorization': `Bearer ${token}` })
           }
@@ -1044,25 +1040,6 @@ export default function SearchPage() {
                               type="date"
                               value={applicationEndDate}
                               onChange={(e) => setApplicationEndDate(e.target.value)}
-                              className="text-sm"
-                            />
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="text-xs text-gray-600 mb-1 block">공개일 범위</label>
-                          <div className="flex items-center gap-2">
-                            <Input
-                              type="date"
-                              value={publicationStartDate}
-                              onChange={(e) => setPublicationStartDate(e.target.value)}
-                              className="text-sm"
-                            />
-                            <span className="text-gray-500">~</span>
-                            <Input
-                              type="date"
-                              value={publicationEndDate}
-                              onChange={(e) => setPublicationEndDate(e.target.value)}
                               className="text-sm"
                             />
                           </div>

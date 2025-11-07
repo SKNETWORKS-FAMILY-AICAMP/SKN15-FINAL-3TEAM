@@ -39,7 +39,35 @@ class PatentViewSet(viewsets.ReadOnlyModelViewSet):
         if self.action == 'list' or self.action == 'search':
             return PatentListSerializer
         return PatentSerializer
-    
+
+    def list(self, request, *args, **kwargs):
+        """
+        전체 특허 목록 조회 (정렬 지원)
+
+        GET /api/patents/?page=1&page_size=10&sort_by=date_desc
+        """
+        sort_by = request.query_params.get('sort_by', 'date_desc')
+
+        # 정렬 방식에 따라 queryset 정렬
+        if sort_by == 'relevance' or sort_by == 'date_desc':
+            # 관련도순은 전체 목록에서는 최신순과 동일
+            queryset = self.queryset.order_by('-application_date', '-id')
+        elif sort_by == 'date_asc':
+            # 오래된순
+            queryset = self.queryset.order_by('application_date', 'id')
+        else:
+            # 기본값: 최신순
+            queryset = self.queryset.order_by('-application_date', '-id')
+
+        # 페이지네이션 적용
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
     @action(detail=False, methods=['get', 'post'], url_path='search')
     def search(self, request):
         """
