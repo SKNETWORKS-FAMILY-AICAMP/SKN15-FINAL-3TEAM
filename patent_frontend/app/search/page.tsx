@@ -34,6 +34,9 @@ interface Paper {
   abstract_en?: string
   abstract_page_link?: string
   pdf_link?: string
+  published_date?: string
+  created_at?: string
+  updated_at?: string
 }
 
 interface RejectReason {
@@ -1776,6 +1779,22 @@ export default function SearchPage() {
                   <div>
                     <h3 className="text-sm font-semibold text-gray-700 mb-1">저자</h3>
                     <p className="text-gray-800">{paperDetails.authors}</p>
+                  </div>
+
+                  {/* 날짜 정보 */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {paperDetails.published_date && (
+                      <div>
+                        <h3 className="text-sm font-semibold text-gray-700 mb-1">발행일</h3>
+                        <p className="text-gray-800">{paperDetails.published_date}</p>
+                      </div>
+                    )}
+                    {paperDetails.created_at && (
+                      <div>
+                        <h3 className="text-sm font-semibold text-gray-700 mb-1">작성일</h3>
+                        <p className="text-gray-800">{paperDetails.created_at.split('T')[0]}</p>
+                      </div>
+                    )}
                   </div>
 
                   {/* 초록 (한글) */}
