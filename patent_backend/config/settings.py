@@ -152,7 +152,7 @@ AUTH_USER_MODEL = 'accounts.User'
 # CORS Settings (Next.js Frontend)
 CORS_ALLOWED_ORIGINS = os.getenv(
     'CORS_ALLOWED_ORIGINS',
-    'http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:3002,http://127.0.0.1:3002'
+    'http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:3002,http://127.0.0.1:3002,http://3-bengio-veraclaim.com,https://3-bengio-veraclaim.com,http://52.79.153.131,http://52.79.153.131:3000'
 ).split(',')
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = [
