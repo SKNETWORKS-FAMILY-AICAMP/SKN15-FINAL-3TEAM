@@ -541,7 +541,7 @@ export default function SearchPage() {
             id: item.id,
             title: item.title_kr,
             applicationNumber: item.authors || '',  // 저자를 applicationNumber에 표시
-            applicationDate: '',  // 논문은 날짜 없음
+            applicationDate: item.published_date || '',  // 발행일
             summary: item.abstract_kr || '',
             pdfLink: item.pdf_link || ''  // PDF 링크 추가
           }))
@@ -552,7 +552,7 @@ export default function SearchPage() {
             id: item.id,
             title: item.title_kr,
             applicationNumber: item.authors || '',
-            applicationDate: '',
+            applicationDate: item.published_date || '',  // 발행일
             summary: item.abstract_kr || '',
             pdfLink: item.pdf_link || ''
           }))
@@ -1121,20 +1121,18 @@ export default function SearchPage() {
                     <p className="text-sm text-gray-600">
                       {searchType === "patent" ? "특허" : "논문"} 총 {totalCount.toLocaleString()}건 검색됨
                     </p>
-                    {searchType === "patent" && (
-                      <select
-                        value={sortBy}
-                        onChange={(e) => {
-                          const newSortBy = e.target.value
-                          setSortBy(newSortBy)
-                          fetchPatents(searchQuery, 1, newSortBy)
-                        }}
-                        className="border border-gray-300 rounded-md px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                      >
-                        <option value="date_desc">최신순</option>
-                        <option value="date_asc">오래된순</option>
-                      </select>
-                    )}
+                    <select
+                      value={sortBy}
+                      onChange={(e) => {
+                        const newSortBy = e.target.value
+                        setSortBy(newSortBy)
+                        fetchPatents(searchQuery, 1, newSortBy)
+                      }}
+                      className="border border-gray-300 rounded-md px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    >
+                      <option value="date_desc">최신순</option>
+                      <option value="date_asc">오래된순</option>
+                    </select>
                   </div>
                 </div>
               )}
@@ -1192,7 +1190,15 @@ export default function SearchPage() {
                             )}
                           </>
                         ) : (
-                          <span>저자: {patent.applicationNumber}</span>
+                          <>
+                            <span>저자: {patent.applicationNumber}</span>
+                            {patent.applicationDate && (
+                              <>
+                                <span className="mx-2">•</span>
+                                <span>발행일: {patent.applicationDate}</span>
+                              </>
+                            )}
+                          </>
                         )}
                       </div>
 
