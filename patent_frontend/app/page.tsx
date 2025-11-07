@@ -61,11 +61,6 @@ export default function LandingPage() {
                   <ArrowRight className="ml-2 w-5 h-5" />
                 </Button>
               </Link>
-              <Link href="/search">
-                <Button size="lg" variant="outline" className="text-base px-8 h-12 bg-white/10 text-white border-white hover:bg-white/20">
-                  특허/논문 검색
-                </Button>
-              </Link>
               <a href="https://github.com/SKNETWORKS-FAMILY-AICAMP/SKN15-FINAL-3TEAM" target="_blank" rel="noopener noreferrer">
                 <Button size="lg" variant="outline" className="text-base px-8 h-12 bg-transparent text-white border-white hover:bg-white/10">
                   자세히 보기
