@@ -182,6 +182,7 @@ def reindex_papers(client):
                 'abstract_page_link': paper.abstract_page_link or '',
                 'pdf_link': paper.pdf_link or '',
                 'source_file': paper.source_file or '',
+                'published_date': paper.published_date or '',
                 'created_at': paper.created_at.isoformat() if paper.created_at else None,
                 'updated_at': paper.updated_at.isoformat() if paper.updated_at else None
             }

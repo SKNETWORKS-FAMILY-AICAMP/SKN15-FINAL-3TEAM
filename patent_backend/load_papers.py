@@ -15,7 +15,7 @@ DB_CONFIG = {
 }
 
 # CSV 파일 경로
-CSV_FILE = '/home/juhyeong/workspace/papers_final_translated.csv'
+CSV_FILE = '/home/juhyeong/workspace/papers_final_translated_with_dates.csv'
 
 # 배치 크기
 BATCH_SIZE = 100
@@ -82,6 +82,7 @@ def load_papers():
                 str(row.get('Abstract_Page_Link', '')) if pd.notna(row.get('Abstract_Page_Link')) else None,
                 str(row.get('PDF_Link', '')) if pd.notna(row.get('PDF_Link')) else None,
                 str(row.get('source_file', '')) if pd.notna(row.get('source_file')) else None,
+                str(row.get('Published_Date', '')) if pd.notna(row.get('Published_Date')) else None,
             ))
 
             # 배치 크기마다 삽입
@@ -89,10 +90,10 @@ def load_papers():
                 insert_query = """
                     INSERT INTO papers (
                         title_en, title_kr, authors, abstract_en, abstract_kr,
-                        abstract_page_link, pdf_link, source_file,
+                        abstract_page_link, pdf_link, source_file, published_date,
                         created_at, updated_at
                     ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
                     )
                 """
 
@@ -108,10 +109,10 @@ def load_papers():
             insert_query = """
                 INSERT INTO papers (
                     title_en, title_kr, authors, abstract_en, abstract_kr,
-                    abstract_page_link, pdf_link, source_file,
+                    abstract_page_link, pdf_link, source_file, published_date,
                     created_at, updated_at
                 ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
                 )
             """
 

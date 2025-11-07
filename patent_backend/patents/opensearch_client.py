@@ -255,6 +255,10 @@ def create_papers_index(client, index_name='papers'):
                 'source_file': {
                     'type': 'keyword'
                 },
+                'published_date': {
+                    'type': 'date',
+                    'format': 'yyyy.MM.dd||yyyy-MM-dd||yyyyMMdd||epoch_millis'
+                },
                 'created_at': {
                     'type': 'date'
                 },

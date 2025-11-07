@@ -61,6 +61,14 @@ class Paper(models.Model):
         null=True
     )
 
+    # 발행일
+    published_date = models.CharField(
+        max_length=20,
+        verbose_name='발행일',
+        blank=True,
+        null=True
+    )
+
     # Full-Text Search Vector (PostgreSQL 전용)
     search_vector = SearchVectorField(
         null=True,

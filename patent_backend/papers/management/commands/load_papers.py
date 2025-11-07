@@ -14,7 +14,7 @@ class Command(BaseCommand):
         parser.add_argument(
             '--file',
             type=str,
-            default='/home/juhyeong/workspace/papers_final_translated.csv',
+            default='/home/juhyeong/workspace/papers_final_translated_with_dates.csv',
             help='Path to CSV file'
         )
         parser.add_argument(
@@ -49,7 +49,8 @@ class Command(BaseCommand):
                     abstract_kr=row.get('Abstract_KR', ''),
                     abstract_page_link=row.get('Abstract_Page_Link', ''),
                     pdf_link=row.get('PDF_Link', ''),
-                    source_file=row.get('source_file', '')
+                    source_file=row.get('source_file', ''),
+                    published_date=row.get('Published_Date', '')
                 )
                 papers_to_create.append(paper)
                 total_count += 1
