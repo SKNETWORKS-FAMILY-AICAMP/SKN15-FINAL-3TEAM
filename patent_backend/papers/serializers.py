@@ -75,3 +75,13 @@ class PaperSearchSerializer(serializers.Serializer):
         default='date_desc',
         help_text='정렬 방식 - 항상 관련도순 우선, 2차 정렬: date_desc(최신순), date_asc(오래된순), relevance(관련도만)'
     )
+    publication_start_date = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        help_text='발행일 시작 범위 (YYYY-MM-DD)'
+    )
+    publication_end_date = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        help_text='발행일 종료 범위 (YYYY-MM-DD)'
+    )

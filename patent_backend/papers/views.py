@@ -62,6 +62,15 @@ class PaperViewSet(viewsets.ReadOnlyModelViewSet):
         page = serializer.validated_data.get('page', 1)
         page_size = serializer.validated_data.get('page_size', 10)
         sort_by = serializer.validated_data.get('sort_by', 'date_desc')
+        publication_start_date = serializer.validated_data.get('publication_start_date')
+        publication_end_date = serializer.validated_data.get('publication_end_date')
+
+        # 날짜 필터 생성
+        filters = {}
+        if publication_start_date:
+            filters['publication_start_date'] = publication_start_date
+        if publication_end_date:
+            filters['publication_end_date'] = publication_end_date
 
         try:
             # OpenSearch 검색
@@ -69,6 +78,7 @@ class PaperViewSet(viewsets.ReadOnlyModelViewSet):
             search_results = opensearch_service.search_papers(
                 keyword=keyword,
                 search_fields=search_fields,
+                filters=filters if filters else None,
                 page=page,
                 page_size=page_size,
                 sort_by=sort_by

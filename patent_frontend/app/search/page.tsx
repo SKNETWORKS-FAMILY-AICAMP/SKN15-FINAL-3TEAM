@@ -493,14 +493,19 @@ export default function SearchPage() {
         const sortByValue = customSortBy !== undefined ? customSortBy : sortBy
         if (sortByValue) requestBody.sort_by = sortByValue
 
-        // 특허 전용 고급 필터
+        // 고급 필터
         if (searchType === "patent") {
+          // 특허 전용 필터
           if (ipcCode) requestBody.ipc_code = ipcCode
           if (applicationStartDate) requestBody.application_start_date = applicationStartDate
           if (applicationEndDate) requestBody.application_end_date = applicationEndDate
           if (publicationStartDate) requestBody.registration_start_date = publicationStartDate
           if (publicationEndDate) requestBody.registration_end_date = publicationEndDate
           if (legalStatusFilter) requestBody.legal_status = legalStatusFilter
+        } else {
+          // 논문 전용 필터 (발행일 범위)
+          if (applicationStartDate) requestBody.publication_start_date = applicationStartDate
+          if (applicationEndDate) requestBody.publication_end_date = applicationEndDate
         }
 
         response = await fetch(`${API_BASE_URL}${endpoint}/search/`, {
@@ -997,88 +1002,108 @@ export default function SearchPage() {
                 )}
               </div>
 
-              {searchType === "patent" && (
-                <div className="mt-4">
-                  <button
-                    onClick={() => setShowAdvanced(!showAdvanced)}
-                    className="flex items-center justify-between w-full text-sm font-medium text-gray-700 hover:text-gray-900"
-                  >
-                    <span>고급 필터</span>
-                    {showAdvanced ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                  </button>
+              <div className="mt-4">
+                <button
+                  onClick={() => setShowAdvanced(!showAdvanced)}
+                  className="flex items-center justify-between w-full text-sm font-medium text-gray-700 hover:text-gray-900"
+                >
+                  <span>고급 필터</span>
+                  {showAdvanced ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </button>
 
                 {showAdvanced && (
                   <div className="mt-3 space-y-3">
-                    <div>
-                      <label className="text-xs text-gray-600 mb-1 block">IPC/CPC 코드</label>
-                      <Input
-                        type="text"
-                        placeholder="A01B"
-                        value={ipcCode}
-                        onChange={(e) => setIpcCode(e.target.value)}
-                        className="text-sm"
-                      />
-                    </div>
+                    {searchType === "patent" ? (
+                      <>
+                        <div>
+                          <label className="text-xs text-gray-600 mb-1 block">IPC/CPC 코드</label>
+                          <Input
+                            type="text"
+                            placeholder="A01B"
+                            value={ipcCode}
+                            onChange={(e) => setIpcCode(e.target.value)}
+                            className="text-sm"
+                          />
+                        </div>
 
-                    <div>
-                      <label className="text-xs text-gray-600 mb-1 block">출원일 범위</label>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="date"
-                          value={applicationStartDate}
-                          onChange={(e) => setApplicationStartDate(e.target.value)}
-                          className="text-sm"
-                        />
-                        <span className="text-gray-500">~</span>
-                        <Input
-                          type="date"
-                          value={applicationEndDate}
-                          onChange={(e) => setApplicationEndDate(e.target.value)}
-                          className="text-sm"
-                        />
+                        <div>
+                          <label className="text-xs text-gray-600 mb-1 block">출원일 범위</label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="date"
+                              value={applicationStartDate}
+                              onChange={(e) => setApplicationStartDate(e.target.value)}
+                              className="text-sm"
+                            />
+                            <span className="text-gray-500">~</span>
+                            <Input
+                              type="date"
+                              value={applicationEndDate}
+                              onChange={(e) => setApplicationEndDate(e.target.value)}
+                              className="text-sm"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-xs text-gray-600 mb-1 block">공개일 범위</label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="date"
+                              value={publicationStartDate}
+                              onChange={(e) => setPublicationStartDate(e.target.value)}
+                              className="text-sm"
+                            />
+                            <span className="text-gray-500">~</span>
+                            <Input
+                              type="date"
+                              value={publicationEndDate}
+                              onChange={(e) => setPublicationEndDate(e.target.value)}
+                              className="text-sm"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-xs text-gray-600 mb-1 block">법적상태</label>
+                          <select
+                            value={legalStatusFilter}
+                            onChange={(e) => setLegalStatusFilter(e.target.value)}
+                            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="">전체</option>
+                            <option value="등록">등록</option>
+                            <option value="공개">공개</option>
+                            <option value="거절">거절</option>
+                            <option value="취하">취하</option>
+                            <option value="포기">포기</option>
+                            <option value="소멸">소멸</option>
+                          </select>
+                        </div>
+                      </>
+                    ) : (
+                      <div>
+                        <label className="text-xs text-gray-600 mb-1 block">발행일 범위</label>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="date"
+                            value={applicationStartDate}
+                            onChange={(e) => setApplicationStartDate(e.target.value)}
+                            className="text-sm"
+                          />
+                          <span className="text-gray-500">~</span>
+                          <Input
+                            type="date"
+                            value={applicationEndDate}
+                            onChange={(e) => setApplicationEndDate(e.target.value)}
+                            className="text-sm"
+                          />
+                        </div>
                       </div>
-                    </div>
-
-                    <div>
-                      <label className="text-xs text-gray-600 mb-1 block">공개일 범위</label>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="date"
-                          value={publicationStartDate}
-                          onChange={(e) => setPublicationStartDate(e.target.value)}
-                          className="text-sm"
-                        />
-                        <span className="text-gray-500">~</span>
-                        <Input
-                          type="date"
-                          value={publicationEndDate}
-                          onChange={(e) => setPublicationEndDate(e.target.value)}
-                          className="text-sm"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="text-xs text-gray-600 mb-1 block">법적상태</label>
-                      <select
-                        value={legalStatusFilter}
-                        onChange={(e) => setLegalStatusFilter(e.target.value)}
-                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="">전체</option>
-                        <option value="등록">등록</option>
-                        <option value="공개">공개</option>
-                        <option value="거절">거절</option>
-                        <option value="취하">취하</option>
-                        <option value="포기">포기</option>
-                        <option value="소멸">소멸</option>
-                      </select>
-                    </div>
-
+                    )}
                   </div>
                 )}
-                </div>
-              )}
+              </div>
             </div>
           </div>
 

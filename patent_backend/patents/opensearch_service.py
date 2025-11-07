@@ -170,13 +170,14 @@ class OpenSearchService:
             'page_size': page_size
         }
 
-    def search_papers(self, keyword, search_fields=None, page=1, page_size=10, sort_by='date_desc'):
+    def search_papers(self, keyword, search_fields=None, filters=None, page=1, page_size=10, sort_by='date_desc'):
         """
         논문 검색
 
         Args:
             keyword: 검색 키워드
             search_fields: 검색할 필드 리스트 (예: ['title_kr', 'abstract_kr'])
+            filters: 필터 조건 딕셔너리
             page: 페이지 번호 (1부터 시작)
             page_size: 페이지당 결과 수
             sort_by: 정렬 방식 ('date_desc': 최신순, 'date_asc': 오래된순, 'relevance': 관련도순)
@@ -188,9 +189,12 @@ class OpenSearchService:
         if not search_fields:
             search_fields = ['title_kr', 'abstract_kr']
 
-        # 검색 쿼리 구성 (정확한 매칭, 모든 단어 포함)
+        # 검색 쿼리 구성
+        must_queries = []
+
+        # 키워드 검색 (정확한 매칭, 모든 단어 포함)
         if keyword:
-            query = {
+            must_queries.append({
                 'multi_match': {
                     'query': keyword,
                     'fields': search_fields,
@@ -198,9 +202,32 @@ class OpenSearchService:
                     'operator': 'and'  # 모든 단어 포함 필요
                     # fuzziness 제거 - 정확한 매칭만
                 }
+            })
+
+        # 필터 조건 추가
+        filter_queries = []
+        if filters:
+            # 발행일 범위 필터
+            if filters.get('publication_start_date') or filters.get('publication_end_date'):
+                date_range = {}
+                if filters.get('publication_start_date'):
+                    date_range['gte'] = filters['publication_start_date']
+                if filters.get('publication_end_date'):
+                    date_range['lte'] = filters['publication_end_date']
+
+                filter_queries.append({
+                    'range': {
+                        'published_date': date_range
+                    }
+                })
+
+        # 최종 쿼리 구성
+        query = {
+            'bool': {
+                'must': must_queries if must_queries else {'match_all': {}},
+                'filter': filter_queries
             }
-        else:
-            query = {'match_all': {}}
+        }
 
         # 페이지네이션
         from_index = (page - 1) * page_size
