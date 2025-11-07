@@ -3,7 +3,11 @@
 """
 from django.core.management.base import BaseCommand
 from patents.models import Patent
-from patents.opensearch_client import OpenSearchClient
+from patents.opensearch_client import (
+    get_opensearch_client,
+    create_patents_index,
+    delete_index
+)
 
 
 class Command(BaseCommand):
@@ -32,19 +36,19 @@ class Command(BaseCommand):
 
         try:
             # OpenSearch 클라이언트 초기화
-            client = OpenSearchClient()
+            client = get_opensearch_client()
             self.stdout.write("✅ OpenSearch 연결 성공\n")
 
             # 인덱스 재생성 (옵션)
             if recreate_index:
                 self.stdout.write("🔄 patents 인덱스 재생성 중...")
                 try:
-                    client.client.indices.delete(index='patents')
+                    delete_index(client, 'patents')
                     self.stdout.write("  ✓ 기존 인덱스 삭제")
                 except Exception as e:
                     self.stdout.write(f"  ℹ 기존 인덱스 없음: {e}")
 
-                client.create_patents_index()
+                create_patents_index(client, 'patents')
                 self.stdout.write("  ✓ 새 인덱스 생성 완료\n")
 
             # 특허 데이터 조회
@@ -58,7 +62,30 @@ class Command(BaseCommand):
 
             for i, patent in enumerate(patents, 1):
                 try:
-                    client.index_patent(patent)
+                    # 특허 문서 생성
+                    doc = {
+                        'title': patent.title or '',
+                        'title_en': patent.title_en or '',
+                        'application_number': patent.application_number,
+                        'application_date': patent.application_date or None,
+                        'applicant': patent.applicant or '',
+                        'registration_number': patent.registration_number or '',
+                        'registration_date': patent.registration_date or None,
+                        'ipc_code': patent.ipc_code or '',
+                        'cpc_code': patent.cpc_code or '',
+                        'abstract': patent.abstract or '',
+                        'claims': patent.claims or '',
+                        'legal_status': patent.legal_status or '',
+                        'created_at': patent.created_at.isoformat() if patent.created_at else None,
+                        'updated_at': patent.updated_at.isoformat() if patent.updated_at else None,
+                    }
+
+                    # OpenSearch에 인덱싱
+                    client.index(
+                        index='patents',
+                        id=patent.application_number,
+                        body=doc
+                    )
                     success_count += 1
 
                     # 진행 상황 출력

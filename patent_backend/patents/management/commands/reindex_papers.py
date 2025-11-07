@@ -3,7 +3,11 @@
 """
 from django.core.management.base import BaseCommand
 from papers.models import Paper
-from patents.opensearch_client import OpenSearchClient
+from patents.opensearch_client import (
+    get_opensearch_client,
+    create_papers_index,
+    delete_index
+)
 
 
 class Command(BaseCommand):
@@ -32,19 +36,19 @@ class Command(BaseCommand):
 
         try:
             # OpenSearch 클라이언트 초기화
-            client = OpenSearchClient()
+            client = get_opensearch_client()
             self.stdout.write("✅ OpenSearch 연결 성공\n")
 
             # 인덱스 재생성 (옵션)
             if recreate_index:
                 self.stdout.write("🔄 papers 인덱스 재생성 중...")
                 try:
-                    client.client.indices.delete(index='papers')
+                    delete_index(client, 'papers')
                     self.stdout.write("  ✓ 기존 인덱스 삭제")
                 except Exception as e:
                     self.stdout.write(f"  ℹ 기존 인덱스 없음: {e}")
 
-                client.create_papers_index()
+                create_papers_index(client, 'papers')
                 self.stdout.write("  ✓ 새 인덱스 생성 완료\n")
 
             # 논문 데이터 조회
@@ -58,7 +62,27 @@ class Command(BaseCommand):
 
             for i, paper in enumerate(papers, 1):
                 try:
-                    client.index_paper(paper)
+                    # 논문 문서 생성
+                    doc = {
+                        'title_en': paper.title_en or '',
+                        'title_kr': paper.title_kr or '',
+                        'authors': paper.authors or '',
+                        'abstract_en': paper.abstract_en or '',
+                        'abstract_kr': paper.abstract_kr or '',
+                        'abstract_page_link': paper.abstract_page_link or '',
+                        'pdf_link': paper.pdf_link or '',
+                        'source_file': paper.source_file or '',
+                        'published_date': paper.published_date or None,
+                        'created_at': paper.created_at.isoformat() if paper.created_at else None,
+                        'updated_at': paper.updated_at.isoformat() if paper.updated_at else None,
+                    }
+
+                    # OpenSearch에 인덱싱
+                    client.index(
+                        index='papers',
+                        id=paper.id,
+                        body=doc
+                    )
                     success_count += 1
 
                     # 진행 상황 출력
