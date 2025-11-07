@@ -289,13 +289,15 @@ async def generate(request: GenerateRequest):
             outputs = model.generate(
                 **inputs,
                 max_new_tokens=request.max_tokens,
+                min_new_tokens=50,  # 최소 50토큰 생성
                 temperature=request.temperature,
                 do_sample=True,
                 top_p=0.9,
                 top_k=50,
-                repetition_penalty=1.1,
+                repetition_penalty=1.2,  # 1.1 → 1.2 (반복 감소)
                 pad_token_id=tokenizer.pad_token_id,
-                eos_token_id=tokenizer.eos_token_id
+                eos_token_id=tokenizer.eos_token_id,
+                no_repeat_ngram_size=3  # 3-gram 반복 방지
             )
 
         # 디코딩
