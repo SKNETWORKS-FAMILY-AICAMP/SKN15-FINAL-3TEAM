@@ -952,7 +952,7 @@ export default function SearchPage() {
               <div className="flex gap-2">
                 <Input
                   type="text"
-                  placeholder={searchType === "patent" ? "특허 키워드 입력 (예: 인공지능, 반도체)" : "논문 키워드 입력 (예: machine learning, AI)"}
+                  placeholder={searchType === "patent" ? "특허 키워드 입력 (예: 게임, 골프 장비, 보드게임)" : "논문 키워드 입력 (예: 딥러닝, 자연어처리, 컴퓨터 비전)"}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSearch()}
