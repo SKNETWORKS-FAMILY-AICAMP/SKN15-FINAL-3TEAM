@@ -1,0 +1,17 @@
+# RunPod LLaMA 모델 서버 의존성
+
+# FastAPI & 서버
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+
+# ML & Transformers
+torch==2.1.2
+transformers==4.37.2
+accelerate==0.26.1
+sentencepiece==0.1.99
+protobuf==4.25.2
+
+# 유틸리티
+requests==2.31.0
+python-multipart==0.0.6
