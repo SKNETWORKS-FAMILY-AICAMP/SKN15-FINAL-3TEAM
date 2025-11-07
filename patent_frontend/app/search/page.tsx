@@ -1139,13 +1139,33 @@ export default function SearchPage() {
               )}
 
               <div style={{ flex: 1, overflowY: 'auto' }}>
-                {searchResults.map((patent) => (
-                  <div
-                    key={patent.id}
-                    className={`p-4 border-b border-gray-200 hover:bg-gray-50 transition-colors ${
-                      patent.highlight ? "bg-yellow-100 animate-pulse" : ""
-                    }`}
-                  >
+                {searchResults.length === 0 && !isSearching ? (
+                  <div className="flex flex-col items-center justify-center h-full py-12 px-4">
+                    <div className="text-gray-400 mb-4">
+                      <svg className="w-24 h-24 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-xl font-semibold text-gray-700 mb-2">검색 결과가 없습니다</h3>
+                    <p className="text-gray-500 text-center max-w-md">
+                      {searchQuery ? (
+                        <>
+                          '<span className="font-semibold">{searchQuery}</span>'에 대한 검색 결과를 찾을 수 없습니다.<br />
+                          다른 검색어를 입력하거나 필터 조건을 변경해보세요.
+                        </>
+                      ) : (
+                        <>검색어를 입력하거나 필터를 선택해주세요.</>
+                      )}
+                    </p>
+                  </div>
+                ) : (
+                  searchResults.map((patent) => (
+                    <div
+                      key={patent.id}
+                      className={`p-4 border-b border-gray-200 hover:bg-gray-50 transition-colors ${
+                        patent.highlight ? "bg-yellow-100 animate-pulse" : ""
+                      }`}
+                    >
                     <div
                       onClick={searchType === "patent" ? () => handleViewDetails(patent.id) : () => handleViewPaperDetails(patent.id)}
                       className="cursor-pointer"
@@ -1193,7 +1213,8 @@ export default function SearchPage() {
                       </div>
                     )}
                   </div>
-                ))}
+                  ))
+                )}
               </div>
 
               <div style={{

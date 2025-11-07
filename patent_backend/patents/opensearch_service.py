@@ -123,7 +123,8 @@ class OpenSearchService:
             'from': from_index,
             'size': page_size,
             'sort': sort_order,
-            'track_total_hits': True  # 정확한 총 개수 추적
+            'track_total_hits': True,  # 정확한 총 개수 추적
+            'min_score': 2.5 if keyword else 0  # 키워드 검색 시 최소 관련도 점수 (관련 없는 결과 필터링)
         }
 
         response = self.client.search(index='patents', body=body)
@@ -136,6 +137,12 @@ class OpenSearchService:
         results = []
         for hit in hits['hits']:
             source = hit['_source']
+            score = hit['_score']
+
+            # 검색어가 있을 때 점수 로깅 (디버깅용)
+            if keyword:
+                print(f"[검색 점수] {score:.2f} - {source.get('title', '')[:50]}")
+
             result = {
                 'id': hit['_id'],
                 'title': source.get('title'),
@@ -150,7 +157,7 @@ class OpenSearchService:
                 'abstract': source.get('abstract'),
                 'claims': source.get('claims'),
                 'legal_status': source.get('legal_status'),
-                'score': hit['_score']
+                'score': score
             }
             results.append(result)
 
@@ -205,7 +212,8 @@ class OpenSearchService:
                 {'_score': {'order': 'desc'}},  # 관련도순
                 {'created_at': {'order': 'desc'}}  # 생성일 최신순
             ],
-            'track_total_hits': True  # 정확한 총 개수 추적
+            'track_total_hits': True,  # 정확한 총 개수 추적
+            'min_score': 2.5 if keyword else 0  # 키워드 검색 시 최소 관련도 점수 (관련 없는 결과 필터링)
         }
 
         response = self.client.search(index='papers', body=body)

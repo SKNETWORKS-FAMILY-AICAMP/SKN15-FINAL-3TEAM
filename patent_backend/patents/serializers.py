@@ -110,8 +110,8 @@ class PatentSearchSerializer(serializers.Serializer):
     sort_by = serializers.CharField(
         required=False,
         allow_blank=True,
-        default='latest',
-        help_text='정렬 방식 (latest: 최신순, oldest: 오래된순)'
+        default='date_desc',
+        help_text='정렬 방식 (date_desc: 최신순, date_asc: 오래된순)'
     )
 
 
