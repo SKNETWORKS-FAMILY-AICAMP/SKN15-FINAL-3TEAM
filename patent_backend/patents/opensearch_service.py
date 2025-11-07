@@ -33,12 +33,24 @@ class OpenSearchService:
         # 검색 쿼리 구성
         must_queries = []
 
-        # 키워드 검색 (정확한 매칭, 모든 단어 포함)
+        # 키워드 검색 (정확한 매칭, 모든 단어 포함, 필드별 가중치)
         if keyword:
+            # 필드별 가중치 적용
+            boosted_fields = []
+            for field in search_fields:
+                if field == 'title':
+                    boosted_fields.append('title^3')  # 제목 3배 가중치
+                elif field == 'abstract':
+                    boosted_fields.append('abstract^2')  # 요약 2배 가중치
+                elif field == 'claims':
+                    boosted_fields.append('claims^1')  # 청구항 기본 가중치
+                else:
+                    boosted_fields.append(field)
+
             must_queries.append({
                 'multi_match': {
                     'query': keyword,
-                    'fields': search_fields,
+                    'fields': boosted_fields,
                     'type': 'best_fields',
                     'operator': 'and'  # 모든 단어 포함 필요
                     # fuzziness 제거 - 정확한 매칭만
@@ -212,12 +224,24 @@ class OpenSearchService:
         # 검색 쿼리 구성
         must_queries = []
 
-        # 키워드 검색 (정확한 매칭, 모든 단어 포함)
+        # 키워드 검색 (정확한 매칭, 모든 단어 포함, 필드별 가중치)
         if keyword:
+            # 필드별 가중치 적용
+            boosted_fields = []
+            for field in search_fields:
+                if 'title' in field:
+                    boosted_fields.append(f'{field}^3')  # 제목 3배 가중치
+                elif 'abstract' in field:
+                    boosted_fields.append(f'{field}^2')  # 요약 2배 가중치
+                elif 'authors' in field:
+                    boosted_fields.append(f'{field}^1.5')  # 저자 1.5배 가중치
+                else:
+                    boosted_fields.append(field)
+
             must_queries.append({
                 'multi_match': {
                     'query': keyword,
-                    'fields': search_fields,
+                    'fields': boosted_fields,
                     'type': 'best_fields',
                     'operator': 'and'  # 모든 단어 포함 필요
                     # fuzziness 제거 - 정확한 매칭만
