@@ -99,7 +99,7 @@ class Command(BaseCommand):
                             index='patents',
                             id=patent.application_number,
                             body=doc,
-                            timeout='60s'  # 개별 요청 타임아웃
+                            timeout=60  # 개별 요청 타임아웃 (초 단위)
                         )
                         success_count += 1
                         indexed = True
