@@ -102,3 +102,7 @@ docs/_build/
 # 실행용 스크립트는 제외하지만 민감 정보 포함 스크립트는 제외
 reset_postgres_password.sh
 create_superuser.sh
+
+# Data loading scripts with credentials
+load_papers.py
+load_patents.py
