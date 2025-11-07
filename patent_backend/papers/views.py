@@ -24,7 +24,7 @@ class PaperViewSet(viewsets.ReadOnlyModelViewSet):
     """
     논문 검색 API
 
-    - 키워드 검색 (PostgreSQL Full-Text Search)
+    - 키워드 검색 (OpenSearch)
     - 제목, 초록, 저자 검색
     """
     queryset = Paper.objects.all()
@@ -136,7 +136,7 @@ class PaperViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['get'], url_path='simple-search')
     def simple_search(self, request):
         """
-        간단한 키워드 검색 (LIKE 사용 - Full-Text Search가 안 되는 경우 대체)
+        간단한 키워드 검색 (LIKE 사용 - OpenSearch가 안 되는 경우 백업용)
 
         GET /api/papers/simple-search/?keyword=인공지능
         """

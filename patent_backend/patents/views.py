@@ -26,8 +26,8 @@ class PatentViewSet(viewsets.ReadOnlyModelViewSet):
     """
     특허 검색 API
 
-    - 키워드 검색 (PostgreSQL Full-Text Search)
-    - 필터링 (출원일, 등록번호 등)
+    - 키워드 검색 (OpenSearch)
+    - 필터링 (출원일, IPC/CPC 코드, 법적상태 등)
     """
     queryset = Patent.objects.all()
     serializer_class = PatentSerializer
@@ -158,8 +158,8 @@ class PatentViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['get'], url_path='simple-search')
     def simple_search(self, request):
         """
-        간단한 키워드 검색 (LIKE 사용 - Full-Text Search가 안 되는 경우 대체)
-        
+        간단한 키워드 검색 (LIKE 사용 - OpenSearch가 안 되는 경우 백업용)
+
         GET /api/patents/simple-search/?keyword=인공지능
         """
         keyword = request.query_params.get('keyword', '')

@@ -74,8 +74,8 @@ class PaperSearchSerializer(serializers.Serializer):
     sort_by = serializers.CharField(
         required=False,
         allow_blank=True,
-        default='date_desc',
-        help_text='정렬 방식 - 항상 관련도순 우선, 2차 정렬: date_desc(최신순), date_asc(오래된순), relevance(관련도만)'
+        default='relevance',
+        help_text='정렬 방식: relevance(관련도순), date_desc(최신순), date_asc(오래된순)'
     )
     publication_start_date = serializers.CharField(
         required=False,

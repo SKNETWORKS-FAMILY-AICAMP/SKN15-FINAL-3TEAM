@@ -357,7 +357,7 @@ export default function AdminPage() {
     setSuccess("")
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/accounts/users/${userId}/delete/`, {
+      const response = await fetch(`${API_BASE_URL}/api/accounts/users/${userId}/`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
