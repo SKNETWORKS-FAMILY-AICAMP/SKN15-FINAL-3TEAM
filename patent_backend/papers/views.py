@@ -1,6 +1,6 @@
 """
 논문 검색 API Views
-PostgreSQL Full-Text Search 사용
+OpenSearch 사용
 """
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -14,6 +14,7 @@ from .serializers import (
     PaperListSerializer,
     PaperSearchSerializer
 )
+from patents.opensearch_service import OpenSearchService
 import logging
 
 logger = logging.getLogger(__name__)
@@ -63,73 +64,24 @@ class PaperViewSet(viewsets.ReadOnlyModelViewSet):
         sort_by = serializer.validated_data.get('sort_by', 'date_desc')
 
         try:
-            # PostgreSQL Full-Text Search
-            query = SearchQuery(keyword, config='simple')
-
-            # 검색 벡터 생성 (동적으로 필드 선택)
-            search_vector = None
-            if 'title_kr' in search_fields:
-                search_vector = SearchVector('title_kr', weight='A')
-            if 'title_en' in search_fields:
-                if search_vector:
-                    search_vector += SearchVector('title_en', weight='B')
-                else:
-                    search_vector = SearchVector('title_en', weight='B')
-            if 'abstract_kr' in search_fields:
-                if search_vector:
-                    search_vector += SearchVector('abstract_kr', weight='B')
-                else:
-                    search_vector = SearchVector('abstract_kr', weight='B')
-            if 'abstract_en' in search_fields:
-                if search_vector:
-                    search_vector += SearchVector('abstract_en', weight='C')
-                else:
-                    search_vector = SearchVector('abstract_en', weight='C')
-            if 'authors' in search_fields:
-                if search_vector:
-                    search_vector += SearchVector('authors', weight='C')
-                else:
-                    search_vector = SearchVector('authors', weight='C')
-
-            # 검색 필드가 하나도 선택되지 않은 경우 기본값 사용
-            if not search_vector:
-                search_vector = SearchVector('title_kr', weight='A') + SearchVector('abstract_kr', weight='B')
-
-            # 검색 실행 및 랭킹
-            results = Paper.objects.annotate(
-                rank=SearchRank(search_vector, query)
-            ).filter(
-                rank__gte=0.001  # 최소 관련도 필터
+            # OpenSearch 검색
+            opensearch_service = OpenSearchService()
+            search_results = opensearch_service.search_papers(
+                keyword=keyword,
+                search_fields=search_fields,
+                page=page,
+                page_size=page_size,
+                sort_by=sort_by
             )
-
-            # 정렬 순서 설정
-            if sort_by == 'date_asc':
-                # 오래된 순 (발행일 기준)
-                results = results.order_by('published_date', 'created_at')
-            elif sort_by == 'relevance':
-                # 관련도순 (검색 점수 기준)
-                results = results.order_by('-rank', '-published_date')
-            else:  # date_desc (기본값)
-                # 최신순 (발행일 기준)
-                results = results.order_by('-published_date', '-created_at')
-
-            # 페이지네이션
-            total_count = results.count()
-            start = (page - 1) * page_size
-            end = start + page_size
-            paginated_results = results[start:end]
-
-            # 응답 데이터 구성
-            result_serializer = PaperListSerializer(paginated_results, many=True)
 
             return Response({
                 'success': True,
                 'keyword': keyword,
-                'total_count': total_count,
-                'page': page,
-                'page_size': page_size,
-                'total_pages': (total_count + page_size - 1) // page_size,
-                'results': result_serializer.data
+                'total_count': search_results['total_count'],
+                'page': search_results['current_page'],
+                'page_size': search_results['page_size'],
+                'total_pages': search_results['total_pages'],
+                'results': search_results['results']
             })
 
         except Exception as e:
