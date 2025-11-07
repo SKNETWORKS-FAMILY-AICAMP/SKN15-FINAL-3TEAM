@@ -11,7 +11,7 @@ class OpenSearchService:
     def __init__(self):
         self.client = get_opensearch_client()
 
-    def search_patents(self, keyword, search_fields=None, filters=None, page=1, page_size=10, sort_by='date_desc'):
+    def search_patents(self, keyword, search_fields=None, filters=None, page=1, page_size=10, sort_by='relevance'):
         """
         특허 검색
 
@@ -142,9 +142,11 @@ class OpenSearchService:
             'size': page_size,
             'sort': sort_order,
             'track_total_hits': True,  # 정확한 총 개수 추적
-            # min_score 임시 비활성화 - 점수 확인 후 적절한 값 설정 필요
-            # 'min_score': 2.5 if keyword else 0
         }
+
+        # 키워드 검색 시 최소 스코어 필터 적용 (관련 없는 결과 제외)
+        if keyword:
+            body['min_score'] = 1.0  # 최소 스코어 1.0 이상만 반환
 
         response = self.client.search(index='patents', body=body)
 
@@ -188,7 +190,7 @@ class OpenSearchService:
             'page_size': page_size
         }
 
-    def search_papers(self, keyword, search_fields=None, filters=None, page=1, page_size=10, sort_by='date_desc'):
+    def search_papers(self, keyword, search_fields=None, filters=None, page=1, page_size=10, sort_by='relevance'):
         """
         논문 검색
 
@@ -292,9 +294,11 @@ class OpenSearchService:
             'size': page_size,
             'sort': sort_order,
             'track_total_hits': True,  # 정확한 총 개수 추적
-            # min_score 임시 비활성화 - 점수 확인 후 적절한 값 설정 필요
-            # 'min_score': 2.5 if keyword else 0
         }
+
+        # 키워드 검색 시 최소 스코어 필터 적용 (관련 없는 결과 제외)
+        if keyword:
+            body['min_score'] = 1.0  # 최소 스코어 1.0 이상만 반환
 
         response = self.client.search(index='papers', body=body)
 
