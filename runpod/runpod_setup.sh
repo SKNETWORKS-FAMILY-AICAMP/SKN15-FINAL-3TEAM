@@ -14,7 +14,7 @@ cd llama_server
 
 # GitHub에서 필요한 파일만 다운로드
 echo "1/4: 서버 파일 다운로드 중..."
-REPO_URL="https://raw.githubusercontent.com/SKNETWORKS-FAMILY-AICAMP/SKN15-FINAL-3TEAM/main"
+REPO_URL="https://raw.githubusercontent.com/SKNETWORKS-FAMILY-AICAMP/SKN15-FINAL-3TEAM/main/runpod"
 
 curl -sS -o runpod_llama_server.py "${REPO_URL}/runpod_llama_server.py"
 curl -sS -o runpod_requirements.txt "${REPO_URL}/runpod_requirements.txt"
