@@ -41,6 +41,11 @@ class Command(BaseCommand):
             reader = csv.DictReader(f)
 
             for row in reader:
+                # 날짜 형식 변환: yyyy.MM.dd -> yyyy-MM-dd
+                published_date = row.get('Published_Date', '')
+                if published_date:
+                    published_date = published_date.replace('.', '-')
+
                 paper = Paper(
                     title_en=row.get('Title_EN', ''),
                     title_kr=row.get('Title_KR', ''),
@@ -50,7 +55,7 @@ class Command(BaseCommand):
                     abstract_page_link=row.get('Abstract_Page_Link', ''),
                     pdf_link=row.get('PDF_Link', ''),
                     source_file=row.get('source_file', ''),
-                    published_date=row.get('Published_Date', '')
+                    published_date=published_date if published_date else None
                 )
                 papers_to_create.append(paper)
                 total_count += 1
