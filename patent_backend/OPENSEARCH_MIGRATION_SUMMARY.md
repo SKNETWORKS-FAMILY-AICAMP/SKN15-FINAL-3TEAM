@@ -667,10 +667,261 @@ def delete_opensearch_on_delete(sender, instance, **kwargs):
 
 ---
 
-## 13. 변경 이력
+## 13. 최근 업데이트 (2025-01 추가 작업)
 
-| 날짜 | 내용 | 커밋 메시지 |
-|------|------|------------|
-| 2025-01-XX | 논문 재인덱싱 기능 추가 | feat: 논문 재인덱싱 기능 추가 |
-| 2025-01-XX | API 인증 설정 복구 | revert: API 인증 설정 원래대로 복구 |
-| 2025-01-XX | PostgreSQL → OpenSearch 전환 | feat: 특허 검색을 OpenSearch로 전환 |
+### 13.1 검색 품질 개선 - 필드 부스팅 (Field Boosting)
+
+**문제점**: `min_score=1.0` 필터만으로는 검색 결과 제한이 부족함
+
+**해결책**: 필드별 가중치 적용으로 관련도 점수 향상
+
+**구현 내용** (`patents/opensearch_service.py`):
+
+#### 특허 검색 필드 부스팅
+```python
+# 필드별 가중치 적용
+boosted_fields = []
+for field in search_fields:
+    if field == 'title':
+        boosted_fields.append('title^3')     # 제목: 3배 가중치
+    elif field == 'abstract':
+        boosted_fields.append('abstract^2')  # 요약: 2배 가중치
+    elif field == 'claims':
+        boosted_fields.append('claims^1')    # 청구항: 1배 (기본)
+    else:
+        boosted_fields.append(field)
+
+must_queries.append({
+    'multi_match': {
+        'query': keyword,
+        'fields': boosted_fields,
+        'type': 'best_fields',
+        'operator': 'and'
+    }
+})
+```
+
+#### 논문 검색 필드 부스팅
+```python
+boosted_fields = []
+for field in search_fields:
+    if 'title' in field:
+        boosted_fields.append(f'{field}^3')    # 제목: 3배 가중치
+    elif 'abstract' in field:
+        boosted_fields.append(f'{field}^2')    # 요약: 2배 가중치
+    elif 'authors' in field:
+        boosted_fields.append(f'{field}^1.5')  # 저자: 1.5배 가중치
+    else:
+        boosted_fields.append(field)
+```
+
+**효과**:
+- 제목에 키워드가 있는 문서의 관련도 점수가 3배 증가
+- `min_score=1.0` 필터와 함께 작동하여 더 정확한 결과 반환
+- 불필요한 저관련도 문서 자동 제외
+
+**커밋**: `feat: 검색 품질 개선 - 필드별 가중치 부스팅 적용` (68a9955)
+
+---
+
+### 13.2 검색 정확도 개선 - operator='and'
+
+**변경 전**:
+```python
+'operator': 'or'   # 키워드 중 하나만 있어도 검색됨
+'fuzziness': 'AUTO'  # 오타 허용
+```
+
+**변경 후**:
+```python
+'operator': 'and'  # 모든 키워드 포함 필수
+# fuzziness 제거 - 정확한 매칭만
+```
+
+**효과**:
+- "게임 골프"로 검색 시 게임과 골프가 **모두** 포함된 문서만 반환
+- 오타 허용 제거로 검색 결과의 정확도 향상
+- 불필요한 검색 결과 대폭 감소
+
+---
+
+### 13.3 min_score 필터
+
+**설정**: `min_score=1.0`
+
+**위치**: `patents/opensearch_service.py` - `search_patents()`, `search_papers()`
+
+**작동 방식**:
+```python
+query = {
+    'query': {
+        'bool': {
+            'must': must_queries,
+            'filter': filter_queries
+        }
+    },
+    'min_score': 1.0,  # 관련도 점수 1.0 이상만 반환
+    'from': (page - 1) * page_size,
+    'size': page_size,
+    'sort': sort_order
+}
+```
+
+**효과**:
+- 필드 부스팅과 결합하여 높은 관련도 결과만 반환
+- 제목 매칭: 점수 3.0 이상 → 확실히 포함
+- 요약 매칭: 점수 2.0 이상 → 포함
+- 낮은 관련도 문서 자동 제외
+
+---
+
+### 13.4 날짜 필터 개선
+
+**문제**: Django에서 `YYYY-MM-DD` 형식으로 전달하지만 PostgreSQL 데이터는 `YYYY.MM.DD` 형식
+
+**해결** (`patents/opensearch_service.py`):
+```python
+# 날짜 형식 변환: YYYY-MM-DD → YYYY.MM.DD
+if filters.get('application_start_date'):
+    date_str = filters['application_start_date']
+    if '-' in date_str:
+        date_str = date_str.replace('-', '.')
+    date_range['gte'] = date_str
+
+if filters.get('application_end_date'):
+    date_str = filters['application_end_date']
+    if '-' in date_str:
+        date_str = date_str.replace('-', '.')
+    date_range['lte'] = date_str
+```
+
+**효과**:
+- 프론트엔드에서 어떤 형식으로 보내도 자동 변환
+- 날짜 범위 필터 정상 작동
+
+---
+
+### 13.5 재인덱싱 명령어 개선
+
+**타임아웃 오류 수정**:
+```python
+# 변경 전 (오류 발생)
+timeout='60s'  # ❌ ValueError: must be int, float or None
+
+# 변경 후 (정상)
+timeout=60  # ✅ 초 단위 정수
+```
+
+**재인덱싱 retry 로직**:
+```python
+for attempt in range(3):  # 최대 3회 재시도
+    try:
+        helpers.bulk(
+            client,
+            actions,
+            timeout=60,  # 60초 타임아웃
+            request_timeout=60
+        )
+        break
+    except Exception as e:
+        if attempt < 2:
+            time.sleep(5)  # 5초 대기 후 재시도
+        else:
+            raise
+```
+
+**EC2 재인덱싱 명령어**:
+```bash
+cd /home/ubuntu/SKN15-FINAL-3TEAM/patent_backend
+DJANGO_SETTINGS_MODULE=config.settings python3 manage.py reindex_patents --recreate-index
+```
+
+**커밋**: `fix: 재인덱싱 타임아웃 파라미터 타입 오류 수정` (cad36d1)
+
+---
+
+### 13.6 프론트엔드 개선
+
+#### 공개일 범위 필터 제거
+**변경 사항** (`patent_frontend/app/search/page.tsx`):
+- 공개일 범위 필터 UI 제거 (사용 빈도 낮음)
+- 출원일 범위, IPC 코드, 법적상태 필터는 유지
+
+**커밋**: `feat: 공개일 범위 필터 제거`
+
+#### 검색창 placeholder 업데이트
+**변경 사항**:
+```typescript
+// 특허 검색창
+placeholder="특허 키워드 입력 (예: 게임, 골프 장비, 보드게임)"
+
+// 논문 검색창
+placeholder="논문 키워드 입력 (예: 딥러닝, 자연어처리, 컴퓨터 비전)"
+```
+
+**커밋**: `Update search box placeholder text with game-related keywords` (e6d0f32)
+
+---
+
+### 13.7 코드 정리 및 문서화
+
+**변경 내용**:
+1. PostgreSQL Full-Text Search 관련 docstring → "OpenSearch"로 업데이트
+   - `patents/views.py`
+   - `papers/views.py`
+
+2. Serializer 정렬 기본값 및 help_text 업데이트
+   - `patents/serializers.py`: `sort_by` 기본값 `'relevance'`
+   - `papers/serializers.py`: `sort_by` 기본값 `'relevance'`
+
+3. Admin 페이지 버그 수정
+   - 사용자 삭제 엔드포인트: `/users/{id}/delete/` → `/users/{id}/`
+
+**커밋**: `fix: 코드 정리 및 docstring 업데이트` (4c0714b)
+
+---
+
+## 14. 현재 시스템 상태 (최종)
+
+### 검색 품질
+- ✅ 필드 부스팅 (제목 3배, 요약 2배)
+- ✅ min_score 필터 (1.0 이상)
+- ✅ operator='and' (모든 키워드 포함)
+- ✅ 정확한 매칭 (fuzziness 제거)
+- ✅ Nori 한국어 형태소 분석
+
+### 필터링
+- ✅ IPC/CPC 코드 (wildcard)
+- ✅ 출원일 범위 (날짜 형식 자동 변환)
+- ✅ 등록일 범위
+- ✅ 법적상태 (정확 일치)
+
+### 정렬
+- ✅ relevance: 관련도순 (기본값)
+- ✅ date_desc: 최신순
+- ✅ date_asc: 오래된순
+
+### 데이터
+- ✅ patents: 61,499건
+- ✅ papers: 196건 (published_date 필드 포함)
+- ✅ reject_documents: 1,090건
+
+### 성능
+- ✅ 타임아웃 60초
+- ✅ 3회 재시도 로직
+- ✅ 배치 인덱싱 (500건 단위)
+
+---
+
+## 15. 변경 이력
+
+| 날짜 | 내용 | 커밋 메시지 | 커밋 해시 |
+|------|------|------------|----------|
+| 2025-01 | 검색창 placeholder 업데이트 | Update search box placeholder text with game-related keywords | e6d0f32 |
+| 2025-01 | 필드 부스팅 적용 | feat: 검색 품질 개선 - 필드별 가중치 부스팅 적용 | 68a9955 |
+| 2025-01 | 타임아웃 오류 수정 | fix: 재인덱싱 타임아웃 파라미터 타입 오류 수정 | cad36d1 |
+| 2025-01 | 코드 정리 및 버그 수정 | fix: 코드 정리 및 docstring 업데이트 | 4c0714b |
+| 2025-01 | 공개일 필터 제거 | feat: 공개일 범위 필터 제거 | - |
+| 2025-01 | 논문 재인덱싱 기능 추가 | feat: 논문 재인덱싱 기능 추가 | - |
+| 2025-01 | API 인증 설정 복구 | revert: API 인증 설정 원래대로 복구 | - |
+| 2025-01 | PostgreSQL → OpenSearch 전환 | feat: 특허 검색을 OpenSearch로 전환 | - |
