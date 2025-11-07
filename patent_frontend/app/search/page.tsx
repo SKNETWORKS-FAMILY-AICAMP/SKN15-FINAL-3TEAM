@@ -1159,6 +1159,7 @@ export default function SearchPage() {
                       }}
                       className="border border-gray-300 rounded-md px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                     >
+                      <option value="relevance">관련도순</option>
                       <option value="date_desc">최신순</option>
                       <option value="date_asc">오래된순</option>
                     </select>
