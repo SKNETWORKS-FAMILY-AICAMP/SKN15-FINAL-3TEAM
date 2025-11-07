@@ -73,5 +73,5 @@ class PaperSearchSerializer(serializers.Serializer):
         required=False,
         allow_blank=True,
         default='date_desc',
-        help_text='정렬 방식 (date_desc: 최신순, date_asc: 오래된순, relevance: 관련도순)'
+        help_text='정렬 방식 - 항상 관련도순 우선, 2차 정렬: date_desc(최신순), date_asc(오래된순), relevance(관련도만)'
     )
