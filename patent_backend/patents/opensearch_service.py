@@ -116,18 +116,28 @@ class OpenSearchService:
         from_index = (page - 1) * page_size
 
         # 정렬 방식 설정
-        if sort_by == 'date_asc':
-            # 관련도순 + 오래된순
-            sort_order = [
-                {'_score': {'order': 'desc'}},
-                {'application_date': {'order': 'asc'}}
-            ]
+        if keyword:
+            # 키워드가 있으면: 관련도 우선, 날짜는 2차 정렬
+            if sort_by == 'date_asc':
+                sort_order = [
+                    {'_score': {'order': 'desc'}},
+                    {'application_date': {'order': 'asc', 'missing': '_last'}}
+                ]
+            else:
+                sort_order = [
+                    {'_score': {'order': 'desc'}},
+                    {'application_date': {'order': 'desc', 'missing': '_last'}}
+                ]
         else:
-            # 관련도순 + 최신순 (기본값)
-            sort_order = [
-                {'_score': {'order': 'desc'}},
-                {'application_date': {'order': 'desc'}}
-            ]
+            # 키워드가 없으면: 날짜만으로 정렬
+            if sort_by == 'date_asc':
+                sort_order = [
+                    {'application_date': {'order': 'asc', 'missing': '_last'}}
+                ]
+            else:
+                sort_order = [
+                    {'application_date': {'order': 'desc', 'missing': '_last'}}
+                ]
 
         # OpenSearch 검색 실행
         body = {
@@ -256,27 +266,42 @@ class OpenSearchService:
         # 페이지네이션
         from_index = (page - 1) * page_size
 
-        # 정렬 순서 설정 - 항상 관련도순 우선, 날짜는 2차 정렬
-        if sort_by == 'date_asc':
-            # 관련도순 + 오래된순
-            sort_order = [
-                {'_score': {'order': 'desc'}},
-                {'published_date': {'order': 'asc', 'missing': '_last'}},
-                {'created_at': {'order': 'asc'}}
-            ]
-        elif sort_by == 'date_desc':
-            # 관련도순 + 최신순 (기본값)
-            sort_order = [
-                {'_score': {'order': 'desc'}},
-                {'published_date': {'order': 'desc', 'missing': '_last'}},
-                {'created_at': {'order': 'desc'}}
-            ]
-        else:  # relevance only
-            # 관련도순만
-            sort_order = [
-                {'_score': {'order': 'desc'}},
-                {'created_at': {'order': 'desc'}}
-            ]
+        # 정렬 순서 설정
+        if keyword:
+            # 키워드가 있으면: 관련도 우선, 날짜는 2차 정렬
+            if sort_by == 'date_asc':
+                sort_order = [
+                    {'_score': {'order': 'desc'}},
+                    {'published_date': {'order': 'asc', 'missing': '_last'}},
+                    {'created_at': {'order': 'asc'}}
+                ]
+            elif sort_by == 'date_desc':
+                sort_order = [
+                    {'_score': {'order': 'desc'}},
+                    {'published_date': {'order': 'desc', 'missing': '_last'}},
+                    {'created_at': {'order': 'desc'}}
+                ]
+            else:  # relevance only
+                sort_order = [
+                    {'_score': {'order': 'desc'}},
+                    {'created_at': {'order': 'desc'}}
+                ]
+        else:
+            # 키워드가 없으면: 날짜만으로 정렬
+            if sort_by == 'date_asc':
+                sort_order = [
+                    {'published_date': {'order': 'asc', 'missing': '_last'}},
+                    {'created_at': {'order': 'asc'}}
+                ]
+            elif sort_by == 'date_desc':
+                sort_order = [
+                    {'published_date': {'order': 'desc', 'missing': '_last'}},
+                    {'created_at': {'order': 'desc'}}
+                ]
+            else:  # relevance only (키워드 없으면 최신순 기본)
+                sort_order = [
+                    {'created_at': {'order': 'desc'}}
+                ]
 
         # OpenSearch 검색 실행
         body = {
