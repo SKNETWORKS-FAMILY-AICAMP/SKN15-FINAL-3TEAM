@@ -48,7 +48,9 @@ def get_opensearch_client():
             use_ssl=use_ssl,
             verify_certs=verify_certs,
             connection_class=RequestsHttpConnection,
-            timeout=30
+            timeout=60,  # 30초 -> 60초로 증가
+            max_retries=3,  # 재시도 횟수
+            retry_on_timeout=True  # 타임아웃 시 재시도
         )
     elif aws_access_key and aws_secret_key:
         # AWS IAM 인증
@@ -65,7 +67,9 @@ def get_opensearch_client():
             use_ssl=use_ssl,
             verify_certs=verify_certs,
             connection_class=RequestsHttpConnection,
-            timeout=30
+            timeout=60,  # 30초 -> 60초로 증가
+            max_retries=3,  # 재시도 횟수
+            retry_on_timeout=True  # 타임아웃 시 재시도
         )
     else:
         # 로컬 OpenSearch 사용 (인증 없음)
@@ -73,7 +77,9 @@ def get_opensearch_client():
             hosts=[{'host': host, 'port': port}],
             use_ssl=use_ssl,
             verify_certs=verify_certs,
-            timeout=30
+            timeout=60,  # 30초 -> 60초로 증가
+            max_retries=3,  # 재시도 횟수
+            retry_on_timeout=True  # 타임아웃 시 재시도
         )
 
     return client

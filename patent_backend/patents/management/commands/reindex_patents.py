@@ -61,55 +61,68 @@ class Command(BaseCommand):
             error_count = 0
 
             for i, patent in enumerate(patents, 1):
-                try:
-                    # 날짜 형식 변환: yyyy.MM.dd -> yyyy-MM-dd
-                    application_date = patent.application_date
-                    if application_date:
-                        application_date = application_date.replace('.', '-')
+                # 날짜 형식 변환: yyyy.MM.dd -> yyyy-MM-dd
+                application_date = patent.application_date
+                if application_date:
+                    application_date = application_date.replace('.', '-')
 
-                    registration_date = patent.registration_date
-                    if registration_date:
-                        registration_date = registration_date.replace('.', '-')
+                registration_date = patent.registration_date
+                if registration_date:
+                    registration_date = registration_date.replace('.', '-')
 
-                    # 특허 문서 생성
-                    doc = {
-                        'title': patent.title or '',
-                        'title_en': patent.title_en or '',
-                        'application_number': patent.application_number,
-                        'application_date': application_date or None,
-                        'applicant': patent.applicant or '',
-                        'registration_number': patent.registration_number or '',
-                        'registration_date': registration_date or None,
-                        'ipc_code': patent.ipc_code or '',
-                        'cpc_code': patent.cpc_code or '',
-                        'abstract': patent.abstract or '',
-                        'claims': patent.claims or '',
-                        'legal_status': patent.legal_status or '',
-                        'created_at': patent.created_at.isoformat() if patent.created_at else None,
-                        'updated_at': patent.updated_at.isoformat() if patent.updated_at else None,
-                    }
+                # 특허 문서 생성
+                doc = {
+                    'title': patent.title or '',
+                    'title_en': patent.title_en or '',
+                    'application_number': patent.application_number,
+                    'application_date': application_date or None,
+                    'applicant': patent.applicant or '',
+                    'registration_number': patent.registration_number or '',
+                    'registration_date': registration_date or None,
+                    'ipc_code': patent.ipc_code or '',
+                    'cpc_code': patent.cpc_code or '',
+                    'abstract': patent.abstract or '',
+                    'claims': patent.claims or '',
+                    'legal_status': patent.legal_status or '',
+                    'created_at': patent.created_at.isoformat() if patent.created_at else None,
+                    'updated_at': patent.updated_at.isoformat() if patent.updated_at else None,
+                }
 
-                    # OpenSearch에 인덱싱
-                    client.index(
-                        index='patents',
-                        id=patent.application_number,
-                        body=doc
-                    )
-                    success_count += 1
+                # OpenSearch에 인덱싱 (재시도 로직 포함)
+                retry_count = 0
+                max_retries = 3
+                indexed = False
 
-                    # 진행 상황 출력
-                    if i % batch_size == 0:
-                        progress = (i / total_count) * 100
-                        self.stdout.write(
-                            f"  ⏳ {i:,}/{total_count:,} ({progress:.1f}%) - "
-                            f"성공: {success_count:,}, 실패: {error_count}"
+                while retry_count < max_retries and not indexed:
+                    try:
+                        client.index(
+                            index='patents',
+                            id=patent.application_number,
+                            body=doc,
+                            timeout='60s'  # 개별 요청 타임아웃
                         )
-                except Exception as e:
-                    error_count += 1
+                        success_count += 1
+                        indexed = True
+                    except Exception as e:
+                        retry_count += 1
+                        if retry_count >= max_retries:
+                            error_count += 1
+                            self.stdout.write(
+                                self.style.ERROR(
+                                    f"  ❌ 인덱싱 실패 (ID: {patent.application_number}, 재시도 {max_retries}회): {str(e)[:100]}"
+                                )
+                            )
+                        else:
+                            # 짧은 대기 후 재시도
+                            import time
+                            time.sleep(1)
+
+                # 진행 상황 출력
+                if i % batch_size == 0:
+                    progress = (i / total_count) * 100
                     self.stdout.write(
-                        self.style.ERROR(
-                            f"  ❌ 인덱싱 실패 (ID: {patent.application_number}): {e}"
-                        )
+                        f"  ⏳ {i:,}/{total_count:,} ({progress:.1f}%) - "
+                        f"성공: {success_count:,}, 실패: {error_count}"
                     )
 
             # 최종 결과
