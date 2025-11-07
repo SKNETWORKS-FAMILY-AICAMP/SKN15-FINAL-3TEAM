@@ -62,15 +62,24 @@ class Command(BaseCommand):
 
             for i, patent in enumerate(patents, 1):
                 try:
+                    # 날짜 형식 변환: yyyy.MM.dd -> yyyy-MM-dd
+                    application_date = patent.application_date
+                    if application_date:
+                        application_date = application_date.replace('.', '-')
+
+                    registration_date = patent.registration_date
+                    if registration_date:
+                        registration_date = registration_date.replace('.', '-')
+
                     # 특허 문서 생성
                     doc = {
                         'title': patent.title or '',
                         'title_en': patent.title_en or '',
                         'application_number': patent.application_number,
-                        'application_date': patent.application_date or None,
+                        'application_date': application_date or None,
                         'applicant': patent.applicant or '',
                         'registration_number': patent.registration_number or '',
-                        'registration_date': patent.registration_date or None,
+                        'registration_date': registration_date or None,
                         'ipc_code': patent.ipc_code or '',
                         'cpc_code': patent.cpc_code or '',
                         'abstract': patent.abstract or '',
