@@ -60,6 +60,7 @@ class PaperViewSet(viewsets.ReadOnlyModelViewSet):
         search_fields = serializer.validated_data.get('search_fields', ['title_kr', 'abstract_kr'])
         page = serializer.validated_data.get('page', 1)
         page_size = serializer.validated_data.get('page_size', 10)
+        sort_by = serializer.validated_data.get('sort_by', 'date_desc')
 
         try:
             # PostgreSQL Full-Text Search
@@ -101,8 +102,16 @@ class PaperViewSet(viewsets.ReadOnlyModelViewSet):
                 rank__gte=0.001  # 최소 관련도 필터
             )
 
-            # 정렬
-            results = results.order_by('-rank', '-created_at')
+            # 정렬 순서 설정
+            if sort_by == 'date_asc':
+                # 오래된 순 (발행일 기준)
+                results = results.order_by('published_date', 'created_at')
+            elif sort_by == 'relevance':
+                # 관련도순 (검색 점수 기준)
+                results = results.order_by('-rank', '-published_date')
+            else:  # date_desc (기본값)
+                # 최신순 (발행일 기준)
+                results = results.order_by('-published_date', '-created_at')
 
             # 페이지네이션
             total_count = results.count()

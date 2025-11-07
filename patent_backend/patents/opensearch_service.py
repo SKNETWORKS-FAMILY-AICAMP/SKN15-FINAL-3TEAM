@@ -170,7 +170,7 @@ class OpenSearchService:
             'page_size': page_size
         }
 
-    def search_papers(self, keyword, search_fields=None, page=1, page_size=10):
+    def search_papers(self, keyword, search_fields=None, page=1, page_size=10, sort_by='date_desc'):
         """
         논문 검색
 
@@ -179,6 +179,7 @@ class OpenSearchService:
             search_fields: 검색할 필드 리스트 (예: ['title_kr', 'abstract_kr'])
             page: 페이지 번호 (1부터 시작)
             page_size: 페이지당 결과 수
+            sort_by: 정렬 방식 ('date_desc': 최신순, 'date_asc': 오래된순, 'relevance': 관련도순)
 
         Returns:
             dict: 검색 결과 및 메타데이터
@@ -204,15 +205,32 @@ class OpenSearchService:
         # 페이지네이션
         from_index = (page - 1) * page_size
 
+        # 정렬 순서 설정
+        if sort_by == 'date_asc':
+            # 오래된 순 (발행일 기준)
+            sort_order = [
+                {'published_date': {'order': 'asc', 'missing': '_last'}},
+                {'created_at': {'order': 'asc'}}
+            ]
+        elif sort_by == 'relevance':
+            # 관련도순 (검색 점수 기준)
+            sort_order = [
+                {'_score': {'order': 'desc'}},
+                {'published_date': {'order': 'desc', 'missing': '_last'}}
+            ]
+        else:  # date_desc (기본값)
+            # 최신순 (발행일 기준)
+            sort_order = [
+                {'published_date': {'order': 'desc', 'missing': '_last'}},
+                {'created_at': {'order': 'desc'}}
+            ]
+
         # OpenSearch 검색 실행
         body = {
             'query': query,
             'from': from_index,
             'size': page_size,
-            'sort': [
-                {'_score': {'order': 'desc'}},  # 관련도순
-                {'created_at': {'order': 'desc'}}  # 생성일 최신순
-            ],
+            'sort': sort_order,
             'track_total_hits': True,  # 정확한 총 개수 추적
             # min_score 임시 비활성화 - 점수 확인 후 적절한 값 설정 필요
             # 'min_score': 2.5 if keyword else 0
@@ -238,6 +256,7 @@ class OpenSearchService:
                 'abstract_page_link': source.get('abstract_page_link'),
                 'pdf_link': source.get('pdf_link'),
                 'source_file': source.get('source_file'),
+                'published_date': source.get('published_date'),
                 'score': hit['_score']
             }
             results.append(result)

@@ -20,6 +20,7 @@ class PaperSerializer(serializers.ModelSerializer):
             'abstract_page_link',
             'pdf_link',
             'source_file',
+            'published_date',
             'created_at',
             'updated_at',
         ]
@@ -37,6 +38,7 @@ class PaperListSerializer(serializers.ModelSerializer):
             'authors',
             'abstract_kr',
             'pdf_link',
+            'published_date',
         ]
 
 
@@ -66,4 +68,10 @@ class PaperSearchSerializer(serializers.Serializer):
         min_value=1,
         max_value=100,
         help_text='페이지당 결과 수 (최대 100)'
+    )
+    sort_by = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default='date_desc',
+        help_text='정렬 방식 (date_desc: 최신순, date_asc: 오래된순, relevance: 관련도순)'
     )
