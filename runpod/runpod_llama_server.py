@@ -171,13 +171,67 @@ def load_model():
         raise
 
 
+def extract_conversation_context(conversation_history: Optional[List[Dict]]) -> str:
+    """
+    대화 히스토리에서 핵심 컨텍스트 추출 (RAG 개념 적용)
+
+    멀티턴 성능 향상 전략:
+    - 이전 대화에서 언급된 주요 엔티티(특허명, 키워드 등) 추출
+    - 대화의 주제와 맥락 파악
+    - 최근 3턴의 요약 생성
+    """
+    if not conversation_history or len(conversation_history) < 2:
+        return ""
+
+    # 최근 6개 메시지 분석 (3턴)
+    recent_messages = conversation_history[-6:]
+
+    # 키워드 추출 (간단한 방식)
+    entities = []
+    topics = []
+
+    for msg in recent_messages:
+        content = msg.get('content', '')
+
+        # 특허/논문 관련 키워드
+        if '특허' in content or '게임' in content or '골프' in content or '보드' in content:
+            topics.append('특허')
+        if '논문' in content or '연구' in content:
+            topics.append('논문')
+
+        # 구체적 엔티티 (예: "치킨", "게임 특허" 등)
+        words = content.split()
+        for word in words:
+            if len(word) >= 2 and word not in ['이거', '저거', '그거', '뭐야', '어떻게']:
+                entities.append(word)
+
+    # 중복 제거 및 컨텍스트 구성
+    unique_topics = list(set(topics))
+    unique_entities = list(set(entities))[-5:]  # 최근 5개만
+
+    context_parts = []
+    if unique_topics:
+        context_parts.append(f"대화 주제: {', '.join(unique_topics)}")
+    if unique_entities:
+        context_parts.append(f"언급된 내용: {', '.join(unique_entities)}")
+
+    if context_parts:
+        return "[대화 컨텍스트]\n" + "\n".join(context_parts) + "\n\n"
+    return ""
+
+
 def build_llama_prompt(
     message: str,
     file_content: Optional[str] = None,
     conversation_history: Optional[List[Dict]] = None
 ) -> str:
     """
-    LLaMA 3.2 Instruct 프롬프트 형식 생성
+    멀티턴 성능 향상을 위한 LLaMA 3.2 프롬프트 생성
+
+    개선 사항:
+    1. RAG 기반 컨텍스트 관리: 대화에서 핵심 정보 추출
+    2. 명확한 지침: 역할과 응답 스타일 명시
+    3. 대화 상태 관리: 이전 맥락 요약 제공
 
     Args:
         message: 현재 사용자 메시지
@@ -189,19 +243,33 @@ def build_llama_prompt(
     """
     prompt_parts = ["<|begin_of_text|>"]
 
-    # 시스템 메시지
+    # 개선된 시스템 메시지 (명확한 지침)
     system_message = (
-        "당신은 특허 검색 및 분석을 도와주는 전문 AI 어시스턴트입니다. "
-        "특허 문서, 논문, 기술 분석 등에 대해 정확하고 전문적으로 답변합니다. "
-        "답변은 간결하고 명확하게 작성하며, 한국어로 응답합니다."
+        "당신은 특허 및 논문 검색·분석 전문 AI 어시스턴트입니다.\n\n"
+        "역할:\n"
+        "- 특허 문서, 논문, 기술 분석에 대한 전문적이고 상세한 답변 제공\n"
+        "- 이전 대화 맥락을 기억하고 연속성 있는 대화 진행\n"
+        "- 사용자가 언급한 내용을 참조하여 답변\n\n"
+        "응답 규칙:\n"
+        "1. 이전 대화에서 언급된 내용은 반드시 기억하고 참조할 것\n"
+        "2. 사용자 질문에 직접적으로 답변할 것\n"
+        "3. 전문적이면서도 이해하기 쉽게 설명할 것\n"
+        "4. 불확실한 경우 추측하지 말고 정직하게 답변할 것\n"
+        "5. 한국어로 자연스럽게 응답할 것"
     )
 
     prompt_parts.append("<|start_header_id|>system<|end_header_id|>")
     prompt_parts.append(f"{system_message}<|eot_id|>")
 
-    # 이전 대화 내역 추가 (최근 10개만)
+    # 대화 컨텍스트 추출 및 요약
+    conversation_context = extract_conversation_context(conversation_history)
+
+    # 이전 대화 내역 추가 (최근 8개 = 4턴)
+    # 컨텍스트가 있으면 더 적은 히스토리로도 충분
+    max_history = 6 if conversation_context else 10
+
     if conversation_history:
-        for hist in conversation_history[-10:]:
+        for hist in conversation_history[-max_history:]:
             role = "user" if hist['type'] == 'user' else "assistant"
             prompt_parts.append(f"<|start_header_id|>{role}<|end_header_id|>")
             prompt_parts.append(f"{hist['content']}<|eot_id|>")
@@ -209,11 +277,21 @@ def build_llama_prompt(
     # 현재 사용자 메시지
     prompt_parts.append("<|start_header_id|>user<|end_header_id|>")
 
-    # 파일 내용이 있으면 포함
+    # 컨텍스트 + 메시지 구성
+    user_message_parts = []
+
+    # 대화 컨텍스트 (RAG)
+    if conversation_context:
+        user_message_parts.append(conversation_context)
+
+    # 파일 내용
     if file_content:
-        prompt_parts.append(f"[첨부 파일 내용]\n{file_content[:1000]}\n\n[질문]\n{message}<|eot_id|>")
-    else:
-        prompt_parts.append(f"{message}<|eot_id|>")
+        user_message_parts.append(f"[첨부 파일]\n{file_content[:1000]}\n")
+
+    # 실제 질문
+    user_message_parts.append(f"[질문]\n{message}")
+
+    prompt_parts.append("\n".join(user_message_parts) + "<|eot_id|>")
 
     # AI 응답 시작
     prompt_parts.append("<|start_header_id|>assistant<|end_header_id|>")
