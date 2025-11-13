@@ -103,10 +103,10 @@ class LlamaChatService(BaseChatService):
                     "message": message,
                     "file_content": file_content,
                     "conversation_history": conversation_history,
-                    "max_tokens": 512,
-                    "temperature": 0.7
+                    "max_tokens": 128,  # 512→128 (응답 속도 개선)
+                    "temperature": 0.3  # 0.7→0.3 (더 일관된 출력)
                 },
-                timeout=60  # 60초 타임아웃
+                timeout=300  # 60초→300초 (5분)
             )
 
             if response.status_code == 200:
