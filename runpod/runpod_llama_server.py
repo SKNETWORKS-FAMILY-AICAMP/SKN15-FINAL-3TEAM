@@ -454,7 +454,8 @@ async def generate(request: GenerateRequest):
                 repetition_penalty=1.2,  # 1.1 → 1.2 (반복 감소)
                 pad_token_id=tokenizer.pad_token_id,
                 eos_token_id=tokenizer.eos_token_id,
-                no_repeat_ngram_size=3  # 3-gram 반복 방지
+                no_repeat_ngram_size=3,  # 3-gram 반복 방지
+                use_cache=False  # DynamicCache 호환성 문제 해결
             )
 
         # 디코딩
