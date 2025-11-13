@@ -487,7 +487,8 @@ async def generate(request: GenerateRequest):
                 use_cache=False,
                 # 한국어 강제 설정
                 forced_bos_token_id=None,  # 시작 토큰 자유롭게
-                exponential_decay_length_penalty=(1, 1.05)  # 짧은 답변 선
+                exponential_decay_length_penalty=(1, 1.05)  # 짧은 답변 선호
+            )
 
         # 디코딩
         full_response = tokenizer.decode(outputs[0], skip_special_tokens=False)
