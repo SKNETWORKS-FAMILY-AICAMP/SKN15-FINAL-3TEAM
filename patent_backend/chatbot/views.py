@@ -61,9 +61,11 @@ def send_message(request):
         file_content=file_content
     )
 
-    # 이전 대화 내역 가져오기
+    # 이전 대화 내역 가져오기 (최근 10개만)
     conversation_history = []
-    previous_messages = conversation.messages.exclude(id=user_message.id).order_by('created_at')
+    previous_messages = conversation.messages.exclude(id=user_message.id).order_by('-created_at')[:10]
+    # 시간순으로 다시 정렬
+    previous_messages = reversed(list(previous_messages))
     for msg in previous_messages:
         conversation_history.append({
             'type': msg.type,
