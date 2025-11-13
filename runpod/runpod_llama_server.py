@@ -22,6 +22,7 @@ python runpod_llama_server.py
 
 import os
 import logging
+import re
 from typing import List, Dict, Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -169,6 +170,32 @@ def load_model():
     except Exception as e:
         logger.error(f"❌ 모델 로딩 실패: {str(e)}")
         raise
+
+
+def clean_non_korean_text(text: str) -> str:
+    """
+    한국어가 아닌 문자를 제거하고 한국어만 남김
+
+    허용:
+    - 한글 (가-힣, ㄱ-ㅎ, ㅏ-ㅣ)
+    - 영문 (A-Z, a-z) - 기술 용어용
+    - 숫자 (0-9)
+    - 기본 문장부호 (.,!?()[]{}'" 등)
+    - 공백
+
+    제거:
+    - 베트남어, 중국어, 일본어, 태국어 등 다른 언어의 문자
+    """
+    # 한글, 영문, 숫자, 기본 문장부호만 허용
+    allowed_pattern = r'[가-힣ㄱ-ㅎㅏ-ㅣa-zA-Z0-9\s.,!?()[\]{}\'"·※→←↑↓√×÷±≤≥≠∞∑∫-]'
+
+    # 문자 단위로 필터링
+    cleaned = ''.join(char for char in text if re.match(allowed_pattern, char))
+
+    # 연속된 공백 정리
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+
+    return cleaned
 
 
 def extract_explicit_memory(conversation_history: Optional[List[Dict]]) -> Dict[str, any]:
@@ -443,7 +470,7 @@ async def generate(request: GenerateRequest):
             max_length=2048  # 입력 길이 제한
         ).to(device)
 
-        # 응답 생성
+        # 응답 생성 (한국어 강제 유지)
         with torch.no_grad():
             outputs = model.generate(
                 **inputs,
@@ -453,12 +480,14 @@ async def generate(request: GenerateRequest):
                 do_sample=True,
                 top_p=0.9,
                 top_k=50,
-                repetition_penalty=1.2,
+                repetition_penalty=1.5,  # 1.2→1.5 (반복 억제 강화)
                 pad_token_id=tokenizer.pad_token_id,
                 eos_token_id=tokenizer.eos_token_id,
                 no_repeat_ngram_size=3,
-                use_cache=False
-            )
+                use_cache=False,
+                # 한국어 강제 설정
+                forced_bos_token_id=None,  # 시작 토큰 자유롭게
+                exponential_decay_length_penalty=(1, 1.05)  # 짧은 답변 선
 
         # 디코딩
         full_response = tokenizer.decode(outputs[0], skip_special_tokens=False)
@@ -473,6 +502,12 @@ async def generate(request: GenerateRequest):
             response_text = response_text.replace("<|end_of_text|>", "").strip()
         else:
             response_text = full_response
+
+        # 한국어가 아닌 언어 제거 (베트남어, 중국어 등)
+        original_length = len(response_text)
+        response_text = clean_non_korean_text(response_text)
+        if len(response_text) < original_length:
+            logger.warning(f"⚠️ 비한국어 문자 제거: {original_length} → {len(response_text)} 글자")
 
         # 토큰 수 계산
         tokens_used = outputs[0].shape[0] - inputs['input_ids'].shape[1]
