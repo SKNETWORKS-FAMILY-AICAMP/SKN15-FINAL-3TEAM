@@ -16,3 +16,6 @@ protobuf>=4.25.0
 # 유틸리티
 requests>=2.31.0
 python-multipart>=0.0.6
+
+# Hugging Face 빠른 다운로드
+hf-transfer>=0.1.3
