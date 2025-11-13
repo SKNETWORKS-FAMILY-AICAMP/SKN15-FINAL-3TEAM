@@ -141,14 +141,15 @@ def load_model():
 
         logger.info("✅ 토크나이저 로딩 완료")
 
-        # 모델 로드
-        logger.info("2/3: 모델 로딩... (시간이 걸릴 수 있습니다)")
+        # 모델 로드 (8비트 양자화로 속도 향상)
+        logger.info("2/3: 모델 로딩... (8비트 양자화 적용)")
         model = AutoModelForCausalLM.from_pretrained(
             MODEL_NAME,
             torch_dtype=torch.float16 if device == "cuda" else torch.float32,
             device_map="auto" if device == "cuda" else None,
             trust_remote_code=True,
-            low_cpu_mem_usage=True
+            low_cpu_mem_usage=True,
+            load_in_8bit=True if device == "cuda" else False  # 8비트 양자화
         )
 
         if device == "cpu":

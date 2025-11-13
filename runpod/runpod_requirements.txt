@@ -10,6 +10,7 @@ pydantic==2.5.3
 # torch>=2.1.0  # 2.1.0 이상이면 모두 호환
 transformers>=4.37.0
 accelerate>=0.26.0
+bitsandbytes>=0.41.0  # 8비트 양자화로 속도 2배 향상
 sentencepiece>=0.1.99
 protobuf>=4.25.0
 
