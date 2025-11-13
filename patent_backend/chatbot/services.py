@@ -8,11 +8,44 @@ import requests
 import logging
 import re
 from django.conf import settings
-# KoSBERT 관련 임포트 제거 (외부 모델 서버 사용)
-# from .model_loader import get_kosbert_loader
-# from .lunch_data import get_all_menu_items, get_random_menu, LUNCH_MENU
+from .lunch_data import get_all_menu_items, get_random_menu, get_menu_by_category, get_random_menu_by_category, LUNCH_MENU
 
 logger = logging.getLogger(__name__)
+
+
+def detect_lunch_request(message: str) -> tuple[bool, str]:
+    """
+    점심 메뉴 추천 요청인지 감지
+
+    Returns:
+        (is_lunch_request, category): 점심 요청 여부와 카테고리
+    """
+    message_lower = message.lower()
+
+    # 점심 관련 키워드
+    lunch_keywords = ['점심', '메뉴', '뭐 먹', '뭐먹', '먹을까', '식사', '밥', '저녁']
+
+    # 카테고리 키워드
+    category_map = {
+        '한식': ['한식', '한국', '김치', '된장', '비빔밥', '제육'],
+        '중식': ['중식', '중국', '짜장', '짬뽕', '탕수육'],
+        '일식': ['일식', '일본', '초밥', '회', '라멘', '우동', '돈카츠'],
+        '양식': ['양식', '파스타', '피자', '스테이크', '햄버거'],
+        '분식': ['분식', '떡볶이', '라면', '김밥'],
+    }
+
+    # 점심 요청인지 확인
+    is_lunch = any(keyword in message_lower for keyword in lunch_keywords)
+
+    if not is_lunch:
+        return False, None
+
+    # 카테고리 감지
+    for category, keywords in category_map.items():
+        if any(keyword in message_lower for keyword in keywords):
+            return True, category
+
+    return True, None  # 카테고리 없이 점심 요청
 
 
 class BaseChatService(ABC):
@@ -48,6 +81,19 @@ class LlamaChatService(BaseChatService):
     def generate_response(self, message: str, file_content: Optional[str] = None,
                          conversation_history: Optional[List[Dict]] = None) -> str:
         """LLaMA 모델 서버에 요청하여 응답 생성"""
+
+        # 점심 메뉴 요청인지 먼저 확인
+        is_lunch, category = detect_lunch_request(message)
+
+        if is_lunch:
+            if category:
+                # 특정 카테고리 요청
+                menus = get_random_menu_by_category(category, 3)
+                return f"오늘 {category} 메뉴 추천드립니다:\n" + "\n".join(f"• {menu}" for menu in menus)
+            else:
+                # 전체 메뉴에서 랜덤
+                menus = get_random_menu(3)
+                return f"오늘의 점심 메뉴 추천드립니다:\n" + "\n".join(f"• {menu}" for menu in menus)
 
         try:
             # 모델 서버에 POST 요청
