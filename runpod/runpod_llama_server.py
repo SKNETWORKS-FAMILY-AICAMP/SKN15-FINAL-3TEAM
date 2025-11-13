@@ -484,10 +484,7 @@ async def generate(request: GenerateRequest):
                 pad_token_id=tokenizer.pad_token_id,
                 eos_token_id=tokenizer.eos_token_id,
                 no_repeat_ngram_size=3,
-                use_cache=False,
-                # 한국어 강제 설정
-                forced_bos_token_id=None,  # 시작 토큰 자유롭게
-                exponential_decay_length_penalty=(1, 1.05)  # 짧은 답변 선호
+                use_cache=False
             )
 
         # 디코딩
