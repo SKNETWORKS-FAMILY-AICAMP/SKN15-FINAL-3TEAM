@@ -446,16 +446,16 @@ async def generate(request: GenerateRequest):
             outputs = model.generate(
                 **inputs,
                 max_new_tokens=request.max_tokens,
-                min_new_tokens=50,  # 최소 50토큰 생성
+                min_new_tokens=20,  # 최소 20토큰 (50→20으로 감소)
                 temperature=request.temperature,
                 do_sample=True,
                 top_p=0.9,
                 top_k=50,
-                repetition_penalty=1.2,  # 1.1 → 1.2 (반복 감소)
+                repetition_penalty=1.2,
                 pad_token_id=tokenizer.pad_token_id,
                 eos_token_id=tokenizer.eos_token_id,
-                no_repeat_ngram_size=3,  # 3-gram 반복 방지
-                use_cache=False  # DynamicCache 호환성 문제 해결
+                no_repeat_ngram_size=3,
+                use_cache=False
             )
 
         # 디코딩
