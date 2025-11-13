@@ -299,6 +299,8 @@ def build_llama_prompt(
     # Few-Shot 예시가 포함된 시스템 메시지 (특허 도메인 특화 + 프로액티브 기능)
     system_message = (
         "당신은 특허 및 논문 검색·분석 전문 AI 어시스턴트입니다.\n\n"
+        "**IMPORTANT: You MUST respond ONLY in Korean language. Never use English, Vietnamese, Chinese, or any other language.**\n"
+        "**중요: 반드시 한국어로만 답변하세요. 영어, 베트남어, 중국어 등 다른 언어를 절대 사용하지 마세요.**\n\n"
         "**중요: 대화 내용을 정확히 기억하는 방법**\n\n"
         "예시 1 - 특허 검색 기억:\n"
         "사용자: 게임 특허 검색하고 싶어\n"
