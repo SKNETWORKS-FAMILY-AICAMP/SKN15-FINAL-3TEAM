@@ -33,6 +33,7 @@ class PatentViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = PatentSerializer
     permission_classes = [AllowAny]  # TODO: 테스트용, 나중에 IsAuthenticated로 변경
     pagination_class = CustomPageNumberPagination
+    lookup_field = 'application_number'  # application_number로 조회
     
     def get_serializer_class(self):
         """액션에 따라 다른 Serializer 사용"""
