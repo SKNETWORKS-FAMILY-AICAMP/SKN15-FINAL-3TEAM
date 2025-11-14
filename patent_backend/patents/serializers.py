@@ -33,6 +33,9 @@ class PatentSerializer(serializers.ModelSerializer):
 class PatentListSerializer(serializers.ModelSerializer):
     """특허 목록용 간단한 Serializer (검색 결과용)"""
 
+    # id를 application_number로 오버라이드 (상세 조회 시 lookup_field와 일치)
+    id = serializers.CharField(source='application_number', read_only=True)
+
     class Meta:
         model = Patent
         fields = [
