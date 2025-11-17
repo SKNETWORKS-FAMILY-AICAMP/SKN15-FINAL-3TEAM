@@ -1,19 +1,3 @@
-<!-- 동적 헤더 배너 -->
-
-
-<!-- 타이핑 애니메이션 -->
-
-
-<!-- 프로젝트 상태 뱃지 -->
-<p align="center">
-  <img src="https://img.shields.io/badge/Project-Active-success?style=flat-square&logo=github"/>
-  <img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square"/>
-  <img src="https://img.shields.io/badge/PRs-Welcome-brightgreen?style=flat-square"/>
-  <img src="https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fgithub.com%2FSKNETWORKS-FAMILY-AICAMP%2FSKN12-FINAL-3TEAM&count_bg=%2379C83D&title_bg=%23555555&icon=&icon_color=%23E7E7E7&title=views&edge_flat=false"/>
-</p>
-
-<!-- 그라데이션 분리선 -->
-<img src="https://user-images.githubusercontent.com/73097560/115834477-dbab4500-a447-11eb-908a-139a6edaec5c.gif">
 
 ## 👨‍👩‍👧‍👦 조원 명단
 
@@ -21,35 +5,34 @@
 <table>
   <tr>
     <td align="center" width="200">
-      <img src="https://github.com/SKNETWORKS-FAMILY-AICAMP/SKN12-FINAL-3TEAM/blob/main/%EC%82%B0%EC%B6%9C%EB%AC%BC/%EB%B0%9C%ED%91%9C%EC%9E%90%EB%A3%8C/img/%EC%8A%AC%EA%B8%B0%EB%8B%98.png?raw=true" width="140" height="140" style="border-radius:50%;">
-      <h3>박슬기</h3>
-      <p><b>PM 겸 풀스택</b></p>
+      <img src="">
+      <h3></h3>
+      <p><b</b></p>
     </td>
     <td align="center" width="200">
-      <img src="https://github.com/SKNETWORKS-FAMILY-AICAMP/SKN12-FINAL-3TEAM/blob/main/%EC%82%B0%EC%B6%9C%EB%AC%BC/%EB%B0%9C%ED%91%9C%EC%9E%90%EB%A3%8C/img/%EB%AA%85%EA%B5%AC%EB%8B%98.png?raw=true" width="140" height="140" style="border-radius:50%;">
-      <h3>노명구</h3>
-      <p><b>AI/ML 엔지니어</b></p>
+      <img src="">
+      <h3></h3>
+      <p><b></b></p>
     </td>
     <td align="center" width="200">
-      <img src="https://github.com/SKNETWORKS-FAMILY-AICAMP/SKN12-FINAL-3TEAM/blob/main/%EC%82%B0%EC%B6%9C%EB%AC%BC/%EB%B0%9C%ED%91%9C%EC%9E%90%EB%A3%8C/img/%EC%A3%BC%EC%98%81%EB%8B%98.png?raw=true" width="140" height="140" style="border-radius:50%;">
-      <h3>이주영</h3>
-      <p><b>백엔드/프론트 개발자</b></p>
+      <img src="">
+      <h3></h3>
+      <p><b></b></p>
     </td>
     <td align="center" width="200">
-      <img src="https://github.com/SKNETWORKS-FAMILY-AICAMP/SKN12-FINAL-3TEAM/blob/main/%EC%82%B0%EC%B6%9C%EB%AC%BC/%EB%B0%9C%ED%91%9C%EC%9E%90%EB%A3%8C/img/%EC%A4%80%EC%84%9D%EB%8B%98.png?raw=true" width="140" height="140" style="border-radius:50%;">
-      <h3>이준석</h3>
-      <p><b>데이터 엔지니어</b></p>
+      <img src="">
+      <h3></h3>
+      <p><b></b></p>
     </td>
     <td align="center" width="200">
-      <img src="https://github.com/SKNETWORKS-FAMILY-AICAMP/SKN12-FINAL-3TEAM/blob/main/%EC%82%B0%EC%B6%9C%EB%AC%BC/%EB%B0%9C%ED%91%9C%EC%9E%90%EB%A3%8C/img/%EC%B0%A8%ED%95%B4%EB%8B%98.png?raw=true" width="140" height="140" style="border-radius:50%;">
-      <h3>황차해</h3>
-      <p><b>AI/ML 엔지니어</b></p>
+      <img src="">
+      <h3></h3>
+      <p><b></b></p>
     </td>
   </tr>
 </table>
 </div>
 
-<img src="https://user-images.githubusercontent.com/73097560/115834477-dbab4500-a447-11eb-908a-139a6edaec5c.gif">
 
 ## 🔍 프로젝트 개요
 
