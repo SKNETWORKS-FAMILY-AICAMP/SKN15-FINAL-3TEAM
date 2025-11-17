@@ -1,10 +1,8 @@
 <!-- 동적 헤더 배너 -->
-![header](https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=24,12,2,5,14&height=300&section=header&text=딸깍%20TtalKkak&fontSize=90&animation=twinkling&fontAlignY=35&desc=AI%20기반%20회의%20분석%20및%20스마트%20업무%20배정%20시스템&descAlignY=51&descAlign=50&fontColor=ffffff)
+
 
 <!-- 타이핑 애니메이션 -->
-<p align="center">
-  <a href="https://git.io/typing-svg"><img src="https://readme-typing-svg.herokuapp.com?font=Fira+Code&weight=700&size=24&pause=1000&color=7CB342&center=true&vCenter=true&width=700&lines=🎯+회의+생산성+80%25+향상;🤖+AI+기반+자동+업무+배정;🔗+Slack,+Jira,+Notion+실시간+연동;📊+스마트+프로젝트+관리+플랫폼" alt="Typing SVG" /></a>
-</p>
+
 
 <!-- 프로젝트 상태 뱃지 -->
 <p align="center">
