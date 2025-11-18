@@ -1,6 +1,6 @@
 """
 RAG 검색 서비스
-Runpod 모델 서버와 PostgreSQL pgvector를 사용한 특허 검색
+Runpod 모델 서버와 PostgreSQL pgvector 또는 FAISS를 사용한 특허 검색
 """
 import os
 import requests
@@ -13,11 +13,27 @@ logger = logging.getLogger(__name__)
 
 
 class RAGService:
-    """RAG 검색 서비스"""
+    """RAG 검색 서비스 (PostgreSQL pgvector 또는 FAISS 자동 선택)"""
 
     def __init__(self):
         self.model_server_url = os.getenv('MODEL_SERVER_URL', 'http://localhost:8001')
         self.timeout = 30  # 타임아웃 30초
+        self.use_faiss = os.getenv('USE_FAISS', 'false').lower() == 'true'
+        self.faiss_service = None
+
+        # FAISS 사용 설정이면 초기화 시도
+        if self.use_faiss:
+            try:
+                from .faiss_rag_service import FAISSRAGService
+                self.faiss_service = FAISSRAGService()
+                if self.faiss_service.is_available():
+                    logger.info("✅ FAISS RAG 서비스 활성화")
+                else:
+                    logger.warning("⚠️ FAISS 초기화 실패, PostgreSQL로 fallback")
+                    self.use_faiss = False
+            except Exception as e:
+                logger.error(f"FAISS 로드 실패: {e}, PostgreSQL 사용")
+                self.use_faiss = False
 
     def _get_embedding(self, text: str) -> List[float]:
         """
@@ -38,7 +54,7 @@ class RAGService:
 
     def search(self, query: str, top_k: int = 5) -> List[Dict]:
         """
-        쿼리를 기반으로 유사한 특허 검색
+        쿼리를 기반으로 유사한 특허 검색 (FAISS 또는 PostgreSQL 자동 선택)
 
         Args:
             query: 검색 쿼리
@@ -47,7 +63,13 @@ class RAGService:
         Returns:
             검색된 특허 문서 리스트
         """
-        logger.info(f"RAG 검색 시작: '{query}' (top_k={top_k})")
+        logger.info(f"RAG 검색 시작: '{query}' (top_k={top_k}, backend={'FAISS' if self.use_faiss else 'PostgreSQL'})")
+
+        # FAISS 사용
+        if self.use_faiss and self.faiss_service:
+            return self.faiss_service.search(query, top_k)
+
+        # PostgreSQL 사용 (기존 로직)
 
         try:
             # 1. 쿼리를 벡터로 변환
