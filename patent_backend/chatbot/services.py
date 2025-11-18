@@ -97,7 +97,9 @@ class LlamaChatService(BaseChatService):
                 return f"오늘의 점심 메뉴 추천드립니다:\n" + "\n".join(f"• {menu}" for menu in menus)
 
         try:
-            # 시스템 프롬프트로 대화 기록 숨기기 (참조만 가능)
+            # 시스템 프롬프트 + 대화 기록 구성
+            system_instruction = "You are a helpful assistant. Answer concisely in Korean. Do not repeat the question or add unnecessary explanations."
+
             prompt = message
             if conversation_history and len(conversation_history) > 0:
                 # 최근 3개 대화만 포함하되, 점심 메뉴 관련 대화는 제외
@@ -116,13 +118,17 @@ class LlamaChatService(BaseChatService):
 
                 if recent_history:
                     # 대화 맥락을 자연스럽게 포함 (Chat 형식)
-                    history_lines = []
+                    history_lines = [system_instruction]
                     for msg in recent_history:
                         role = "User" if msg['type'] == 'user' else "Assistant"
                         history_lines.append(f"{role}: {msg['content']}")
 
                     history_text = "\n".join(history_lines)
                     prompt = f"{history_text}\nUser: {message}\nAssistant:"
+                else:
+                    prompt = f"{system_instruction}\nUser: {message}\nAssistant:"
+            else:
+                prompt = f"{system_instruction}\nUser: {message}\nAssistant:"
 
             # 모델 서버에 POST 요청
             response = requests.post(
@@ -313,7 +319,9 @@ class RAGChatService(BaseChatService):
         # 일반 질문은 기존 LLaMA 서비스 사용
         else:
             try:
-                # 시스템 프롬프트로 대화 기록 숨기기 (참조만 가능)
+                # 시스템 프롬프트 + 대화 기록 구성
+                system_instruction = "You are a helpful assistant. Answer concisely in Korean. Do not repeat the question or add unnecessary explanations."
+
                 prompt = message
                 if conversation_history and len(conversation_history) > 0:
                     # 최근 3개 대화만 포함하되, 점심 메뉴 관련 대화는 제외
@@ -333,13 +341,17 @@ class RAGChatService(BaseChatService):
 
                     if recent_history:
                         # 대화 맥락을 자연스럽게 포함 (Chat 형식)
-                        history_lines = []
+                        history_lines = [system_instruction]
                         for msg in recent_history:
                             role = "User" if msg['type'] == 'user' else "Assistant"
                             history_lines.append(f"{role}: {msg['content']}")
 
                         history_text = "\n".join(history_lines)
                         prompt = f"{history_text}\nUser: {message}\nAssistant:"
+                    else:
+                        prompt = f"{system_instruction}\nUser: {message}\nAssistant:"
+                else:
+                    prompt = f"{system_instruction}\nUser: {message}\nAssistant:"
 
                 response = requests.post(
                     f"{self.model_server_url}/generate",
