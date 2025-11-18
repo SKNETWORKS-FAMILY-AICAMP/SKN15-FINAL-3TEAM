@@ -97,23 +97,11 @@ class LlamaChatService(BaseChatService):
                 return f"오늘의 점심 메뉴 추천드립니다:\n" + "\n".join(f"• {menu}" for menu in menus)
 
         try:
-            # 대화 기록을 포함한 프롬프트 구성
-            prompt = message
-            if conversation_history and len(conversation_history) > 0:
-                # 최근 5개 대화만 포함 (토큰 제한)
-                recent_history = conversation_history[-5:]
-                history_text = "\n".join([
-                    f"{'사용자' if msg['type'] == 'user' else 'AI'}: {msg['content']}"
-                    for msg in recent_history
-                    if not msg['content'].startswith('모델 서버 오류')  # 에러 메시지 제외
-                ])
-                prompt = f"{history_text}\n사용자: {message}\nAI:"
-
-            # 모델 서버에 POST 요청
+            # 모델 서버에 POST 요청 (대화 기록 사용 안 함)
             response = requests.post(
                 f"{self.model_server_url}/generate",
                 json={
-                    "prompt": prompt,
+                    "prompt": message,
                     "max_length": 128,
                     "temperature": 0.7
                 },
@@ -298,24 +286,12 @@ class RAGChatService(BaseChatService):
         # 일반 질문은 기존 LLaMA 서비스 사용
         else:
             try:
-                # 파일 내용이 있으면 컨텍스트에 추가
-                context = file_content if file_content else ""
-
-                # 대화 기록 추가
-                if conversation_history:
-                    history_text = "\n".join([
-                        f"{msg['type']}: {msg['content']}"
-                        for msg in conversation_history[-5:]  # 최근 5개만
-                    ])
-                    context = f"{history_text}\n\n{context}"
-
-                prompt = f"{context}\n\n사용자: {message}\nAI:" if context else message
-
+                # 단순 메시지만 전달 (대화 기록 사용 안 함)
                 response = requests.post(
                     f"{self.model_server_url}/generate",
                     json={
-                        "prompt": prompt,
-                        "max_length": 512,
+                        "prompt": message,
+                        "max_length": 128,
                         "temperature": 0.7
                     },
                     timeout=60
