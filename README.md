@@ -5,11 +5,11 @@
   <tr>
     <td align="center" width="200">
       <img src="" width="120" height="120">
-      <h3>노건우</h3>
+      <h3>김주형(PM)</h3>
     </td>
     <td align="center" width="200">
       <img src="" width="120" height="120">
-      <h3>김주형</h3>
+      <h3>노건우</h3>
     </td>
     <td align="center" width="200">
       <img src="" width="120" height="120">
