@@ -44,7 +44,7 @@ try:
     # 분류 베이스 모델
     classification_base_model = AutoModelForSequenceClassification.from_pretrained(
         classification_base_model_name,
-        num_labels=650,  # IPC 클래스 수 (필요시 조정)
+        num_labels=2,  # 실제 모델이 2-class로 학습됨
         trust_remote_code=True,
         torch_dtype=torch.float16 if device == "cuda" else torch.float32
     )

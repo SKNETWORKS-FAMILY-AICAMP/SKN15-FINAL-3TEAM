@@ -101,10 +101,8 @@ class LlamaChatService(BaseChatService):
             response = requests.post(
                 f"{self.model_server_url}/generate",
                 json={
-                    "message": message,
-                    "file_content": file_content,
-                    "conversation_history": conversation_history,
-                    "max_tokens": 128,  # 512→128 (응답 속도 개선)
+                    "prompt": message,  # message → prompt로 변경
+                    "max_length": 128,  # max_tokens → max_length로 변경
                     "temperature": 0.3  # 0.7→0.3 (더 일관된 출력)
                 },
                 timeout=300  # 60초→300초 (5분)
