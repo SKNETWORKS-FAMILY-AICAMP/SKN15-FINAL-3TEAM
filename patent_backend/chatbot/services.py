@@ -115,21 +115,14 @@ class LlamaChatService(BaseChatService):
                 recent_history = recent_history[-3:]
 
                 if recent_history:
-                    # 시스템 프롬프트 형식: 대화 맥락은 제공하되 직접 언급하지 않게 유도
-                    history_context = "\n".join([
-                        f"- {msg['type']}: {msg['content']}"
-                        for msg in recent_history
-                    ])
-                    prompt = f"""[대화 맥락 - 참고만 하고 직접 언급하지 말 것]
-{history_context}
+                    # 대화 맥락을 자연스럽게 포함 (Chat 형식)
+                    history_lines = []
+                    for msg in recent_history:
+                        role = "User" if msg['type'] == 'user' else "Assistant"
+                        history_lines.append(f"{role}: {msg['content']}")
 
-[현재 사용자 질문]
-{message}
-
-[답변 지침]
-- 위 대화 맥락을 참고하되, "이전에 말씀하신..." 같은 직접적인 언급은 하지 말 것
-- 자연스럽게 맥락을 이해한 답변을 제공할 것
-- 간결하고 명확하게 답변할 것"""
+                    history_text = "\n".join(history_lines)
+                    prompt = f"{history_text}\nUser: {message}\nAssistant:"
 
             # 모델 서버에 POST 요청
             response = requests.post(
@@ -339,21 +332,14 @@ class RAGChatService(BaseChatService):
                     recent_history = recent_history[-3:]
 
                     if recent_history:
-                        # 시스템 프롬프트 형식: 대화 맥락은 제공하되 직접 언급하지 않게 유도
-                        history_context = "\n".join([
-                            f"- {msg['type']}: {msg['content']}"
-                            for msg in recent_history
-                        ])
-                        prompt = f"""[대화 맥락 - 참고만 하고 직접 언급하지 말 것]
-{history_context}
+                        # 대화 맥락을 자연스럽게 포함 (Chat 형식)
+                        history_lines = []
+                        for msg in recent_history:
+                            role = "User" if msg['type'] == 'user' else "Assistant"
+                            history_lines.append(f"{role}: {msg['content']}")
 
-[현재 사용자 질문]
-{message}
-
-[답변 지침]
-- 위 대화 맥락을 참고하되, "이전에 말씀하신..." 같은 직접적인 언급은 하지 말 것
-- 자연스럽게 맥락을 이해한 답변을 제공할 것
-- 간결하고 명확하게 답변할 것"""
+                        history_text = "\n".join(history_lines)
+                        prompt = f"{history_text}\nUser: {message}\nAssistant:"
 
                 response = requests.post(
                     f"{self.model_server_url}/generate",
