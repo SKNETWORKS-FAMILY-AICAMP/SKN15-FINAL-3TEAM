@@ -96,6 +96,28 @@ except Exception as e:
     logger.warning(f"⚠️ LLM 모델 로드 실패: {e}. LLM 기능 비활성화")
     LLM_AVAILABLE = False
 
+# 4. SLLM (Qwen2.5-14B + checkpoint-16 LoRA) - 거절 이유 분석 전문 모델
+logger.info("📦 SLLM (거절 이유 분석) 모델 로딩...")
+sllm_adapter_path = "/workspace/models/checkpoint-16"  # checkpoint-16 경로
+
+try:
+    # SLLM은 LLM과 같은 베이스 모델 사용 (Qwen2.5-14B)
+    # 토크나이저도 동일
+    sllm_tokenizer = llm_tokenizer  # 재사용
+
+    # SLLM 모델 로드 (베이스 모델 + checkpoint-16 LoRA)
+    sllm_model = PeftModel.from_pretrained(
+        llm_base_model,  # 같은 베이스 모델 재사용
+        sllm_adapter_path
+    )
+    sllm_model.eval()
+    logger.info("✅ SLLM (checkpoint-16) 모델 로드 완료")
+
+    SLLM_AVAILABLE = True
+except Exception as e:
+    logger.warning(f"⚠️ SLLM 모델 로드 실패: {e}. SLLM 기능 비활성화")
+    SLLM_AVAILABLE = False
+
 logger.info("🎉 모든 모델 로딩 완료!")
 
 
@@ -281,6 +303,8 @@ def rag_pipeline(request: RAGPipelineRequest):
     try:
         # 1. 분류 (선택사항)
         classified_patents = []
+        is_rejection = False  # 거절 여부 플래그
+
         if request.use_classification and CLASSIFICATION_AVAILABLE:
             logger.info("특허 분류 수행 중...")
 
@@ -293,11 +317,16 @@ def rag_pipeline(request: RAGPipelineRequest):
                 patent_with_class = patent.copy()
                 patent_with_class['classification'] = classification_result['classifications'][i]
                 classified_patents.append(patent_with_class)
+
+            # 첫 번째 특허의 분류 결과로 거절 여부 판단
+            # 분류 결과: label_0 = 등록, label_1 = 거절 (모델에 따라 다를 수 있음)
+            first_classification = classification_result['classifications'][0]['predictions'][0]
+            is_rejection = first_classification['label'] == 'label_1'
+            logger.info(f"분류 결과: {'거절' if is_rejection else '등록'} (label: {first_classification['label']})")
         else:
             classified_patents = request.patents
 
-        # 2. LLM 프롬프트 구성 (특허 분석용 Chat Template)
-        # 유사 특허 목록 생성
+        # 2. 유사 특허 목록 생성 (공통)
         similar_claims_text = ""
         mappings = []
         for i, p in enumerate(classified_patents, 1):
@@ -307,56 +336,130 @@ def rag_pipeline(request: RAGPipelineRequest):
             similar_claims_text += f"{i}) [출원번호: {app_no}]\n제목: {title}\n내용: {text}...\n\n"
             mappings.append(f"- 인용발명{i}: 출원번호 {app_no}")
 
-        # Qwen Chat Template 형식으로 구성
-        system_msg = (
-            "You are Qwen, a helpful patent analysis assistant.\n"
-            "규칙:\n"
-            "1) 반드시 한국어만 사용하고 중국어, 일본어 등 외국어(한자 포함)를 절대 사용하지 마십시오.\n"
-            "2) 출력은 한 단락의 한국어 공식 문장으로만 작성하십시오.\n"
-            "3) 본문에서 인용발명을 언급할 때는 반드시 '인용발명N(출원번호 XXXXX)' 형식으로 표기하십시오.\n"
-        )
+        # 3. 거절건이면 SLLM 사용, 등록건이면 LLM 사용
+        if is_rejection and SLLM_AVAILABLE:
+            logger.info("🔴 거절 건 감지 → SLLM (checkpoint-16) 사용")
 
-        user_msg = (
-            f"다음 유사 특허 정보를 바탕으로 사용자 질문에 답변해주세요.\n\n"
-            f"[사용자 질문]\n{request.query}\n\n"
-            f"[유사 특허 목록 (상위 {len(classified_patents)}개)]\n{similar_claims_text}\n"
-            f"[인용발명 라벨-출원번호 매핑]\n" + "\n".join(mappings) + "\n\n"
-            "주의: 본문에서 인용발명을 언급할 때는 반드시 '인용발명N(출원번호 XXXXX)' 형식으로 표기하고, "
-            "한국어만 사용하며 간결하게 작성하라."
-        )
-
-        # Qwen Chat Template 형식
-        prompt = f"<|im_start|>system\n{system_msg}<|im_end|>\n<|im_start|>user\n{user_msg}<|im_end|>\n<|im_start|>assistant"
-
-        # 3. LLM 답변 생성
-        if LLM_AVAILABLE:
-            logger.info("LLM 답변 생성 중...")
-            llm_response = generate_response(
-                LLMRequest(
-                    prompt=prompt,
-                    max_length=request.max_length
-                )
+            # SLLM 프롬프트 구성 (거절 이유 분석 특화)
+            system_msg = (
+                "You are Qwen, a helpful patent analysis assistant.\n"
+                "규칙:\n"
+                "1) 반드시 한국어만 사용하고 중국어, 일본어 등 외국어(한자 포함)를 절대 사용하지 마십시오.\n"
+                "2) 출력은 줄바꿈 없이 한 단락의 한국어 공식 문장으로만 작성하십시오.\n"
+                "3) 본문에서 인용발명을 언급할 때는 반드시 '인용발명N(출원번호 XXXXX)' 형식으로 표기하십시오.\n"
             )
 
+            user_msg = (
+                f"다음 (선행문헌/유사문서의 청구항 목록과 대상 청구항)을 바탕으로, "
+                f"거절 사유(신규성, 진보성, 명확성 등)를 판별하고 핵심 근거를 3줄 이내로 간결히 설명해줘. "
+                f"유사점과 차이점을 명확히 지적해.\n\n"
+                f"[사용자 질문]\n{request.query}\n\n"
+                f"[유사 특허 목록 (상위 {len(classified_patents)}개)]\n{similar_claims_text}\n"
+                f"[인용발명 라벨-출원번호 매핑]\n" + "\n".join(mappings) + "\n\n"
+                "주의: 본문에서 인용발명을 언급할 때는 반드시 '인용발명N(출원번호 XXXXX)' 형식으로 표기하고, "
+                "한국어만 사용하며 한 단락으로 작성하라."
+            )
+
+            prompt = f"<|im_start|>system\n{system_msg}<|im_end|>\n<|im_start|>user\n{user_msg}<|im_end|>\n<|im_start|>assistant"
+
+            # SLLM 생성 (checkpoint-16 파라미터 사용)
+            inputs = sllm_tokenizer([prompt], return_tensors="pt", truncation=True, max_length=1792).to(device)
+
+            with torch.inference_mode():
+                outputs = sllm_model.generate(
+                    **inputs,
+                    max_new_tokens=256,
+                    do_sample=False,
+                    num_beams=3,
+                    no_repeat_ngram_size=3,
+                    length_penalty=0.9,
+                    repetition_penalty=1.1,
+                    pad_token_id=sllm_tokenizer.pad_token_id,
+                    eos_token_id=sllm_tokenizer.eos_token_id
+                )
+
+            response_text = sllm_tokenizer.decode(
+                outputs[0][inputs['input_ids'].shape[1]:],
+                skip_special_tokens=True
+            ).strip()
+
+            # 후처리: 중국어 제거, 줄바꿈 제거
+            import re
+            response_text = re.sub(r'[\u4E00-\u9FFF]+', '', response_text)
+            response_text = re.sub(r'\s*\n\s*', ' ', response_text).strip()
+
+            # 마지막 문구 추가 (거절 결론)
+            if not response_text.endswith("따라서 특허를 받을 수 없습니다."):
+                if not response_text.endswith("."):
+                    response_text += "."
+                response_text += " 따라서 특허를 받을 수 없습니다."
+
             return {
                 "query": request.query,
                 "patents_used": len(classified_patents),
-                "classified": request.use_classification and CLASSIFICATION_AVAILABLE,
-                "response": llm_response['response'],
+                "classified": True,
+                "classification": "rejection",
+                "model_used": "SLLM (checkpoint-16)",
+                "response": response_text,
                 "metadata": {
-                    "prompt_length": llm_response['prompt_length'],
-                    "generated_length": llm_response['generated_length']
+                    "prompt_length": inputs['input_ids'].shape[1],
+                    "generated_length": outputs.shape[1] - inputs['input_ids'].shape[1]
                 }
             }
+
+        # 4. 등록건 또는 SLLM 사용 불가 시 일반 LLM 사용
         else:
-            # LLM 사용 불가 시 검색 결과만 반환
-            return {
-                "query": request.query,
-                "patents_used": len(classified_patents),
-                "classified": request.use_classification and CLASSIFICATION_AVAILABLE,
-                "response": f"관련 특허 {len(classified_patents)}개를 찾았습니다:\n\n{similar_claims_text}",
-                "metadata": {"llm_available": False}
-            }
+            logger.info("🟢 등록 건 또는 일반 질문 → LLM (qwen-14b) 사용")
+
+            # 일반 LLM 프롬프트 구성
+            system_msg = (
+                "You are Qwen, a helpful patent analysis assistant.\n"
+                "규칙:\n"
+                "1) 반드시 한국어만 사용하고 중국어, 일본어 등 외국어(한자 포함)를 절대 사용하지 마십시오.\n"
+                "2) 출력은 한 단락의 한국어 공식 문장으로만 작성하십시오.\n"
+                "3) 본문에서 인용발명을 언급할 때는 반드시 '인용발명N(출원번호 XXXXX)' 형식으로 표기하십시오.\n"
+            )
+
+            user_msg = (
+                f"다음 유사 특허 정보를 바탕으로 사용자 질문에 답변해주세요.\n\n"
+                f"[사용자 질문]\n{request.query}\n\n"
+                f"[유사 특허 목록 (상위 {len(classified_patents)}개)]\n{similar_claims_text}\n"
+                f"[인용발명 라벨-출원번호 매핑]\n" + "\n".join(mappings) + "\n\n"
+                "주의: 본문에서 인용발명을 언급할 때는 반드시 '인용발명N(출원번호 XXXXX)' 형식으로 표기하고, "
+                "한국어만 사용하며 간결하게 작성하라."
+            )
+
+            prompt = f"<|im_start|>system\n{system_msg}<|im_end|>\n<|im_start|>user\n{user_msg}<|im_end|>\n<|im_start|>assistant"
+
+            if LLM_AVAILABLE:
+                llm_response = generate_response(
+                    LLMRequest(
+                        prompt=prompt,
+                        max_length=request.max_length
+                    )
+                )
+
+                return {
+                    "query": request.query,
+                    "patents_used": len(classified_patents),
+                    "classified": request.use_classification and CLASSIFICATION_AVAILABLE,
+                    "classification": "registration" if is_rejection == False else "unknown",
+                    "model_used": "LLM (qwen-14b)",
+                    "response": llm_response['response'],
+                    "metadata": {
+                        "prompt_length": llm_response['prompt_length'],
+                        "generated_length": llm_response['generated_length']
+                    }
+                }
+            else:
+                # LLM 사용 불가 시 검색 결과만 반환
+                return {
+                    "query": request.query,
+                    "patents_used": len(classified_patents),
+                    "classified": request.use_classification and CLASSIFICATION_AVAILABLE,
+                    "response": f"관련 특허 {len(classified_patents)}개를 찾았습니다:\n\n{similar_claims_text}",
+                    "metadata": {"llm_available": False}
+                }
 
     except Exception as e:
         logger.error(f"RAG 파이프라인 실패: {e}")
@@ -373,7 +476,8 @@ def health_check():
         "models": {
             "embedding": True,
             "classification": CLASSIFICATION_AVAILABLE,
-            "llm": LLM_AVAILABLE
+            "llm": LLM_AVAILABLE,
+            "sllm": SLLM_AVAILABLE
         }
     }
 
