@@ -97,11 +97,35 @@ class LlamaChatService(BaseChatService):
                 return f"오늘의 점심 메뉴 추천드립니다:\n" + "\n".join(f"• {menu}" for menu in menus)
 
         try:
-            # 모델 서버에 POST 요청 (대화 기록 사용 안 함)
+            # 대화 기록을 포함한 프롬프트 구성 (관련 대화만)
+            prompt = message
+            if conversation_history and len(conversation_history) > 0:
+                # 최근 3개 대화만 포함하되, 점심 메뉴 관련 대화는 제외
+                recent_history = []
+                for msg in conversation_history[-6:]:  # 최근 6개 확인
+                    content = msg.get('content', '')
+                    # 점심 메뉴, 에러 메시지 제외
+                    if ('점심' not in content and '메뉴' not in content and
+                        not content.startswith('모델 서버 오류') and
+                        not content.startswith('오늘') and
+                        '먹' not in content):
+                        recent_history.append(msg)
+
+                # 최근 3개만 사용
+                recent_history = recent_history[-3:]
+
+                if recent_history:
+                    history_text = "\n".join([
+                        f"{'사용자' if msg['type'] == 'user' else 'AI'}: {msg['content']}"
+                        for msg in recent_history
+                    ])
+                    prompt = f"{history_text}\n사용자: {message}\nAI:"
+
+            # 모델 서버에 POST 요청
             response = requests.post(
                 f"{self.model_server_url}/generate",
                 json={
-                    "prompt": message,
+                    "prompt": prompt,
                     "max_length": 128,
                     "temperature": 0.7
                 },
@@ -286,11 +310,35 @@ class RAGChatService(BaseChatService):
         # 일반 질문은 기존 LLaMA 서비스 사용
         else:
             try:
-                # 단순 메시지만 전달 (대화 기록 사용 안 함)
+                # 대화 기록을 포함한 프롬프트 구성 (관련 대화만)
+                prompt = message
+                if conversation_history and len(conversation_history) > 0:
+                    # 최근 3개 대화만 포함하되, 점심 메뉴 관련 대화는 제외
+                    recent_history = []
+                    for msg in conversation_history[-6:]:
+                        content = msg.get('content', '')
+                        # 점심 메뉴, 에러 메시지 제외
+                        if ('점심' not in content and '메뉴' not in content and
+                            not content.startswith('모델 서버 오류') and
+                            not content.startswith('오늘의') and
+                            '먹' not in content and
+                            not content.startswith('죄송합니다')):
+                            recent_history.append(msg)
+
+                    # 최근 3개만 사용
+                    recent_history = recent_history[-3:]
+
+                    if recent_history:
+                        history_text = "\n".join([
+                            f"{'사용자' if msg['type'] == 'user' else 'AI'}: {msg['content']}"
+                            for msg in recent_history
+                        ])
+                        prompt = f"{history_text}\n사용자: {message}\nAI:"
+
                 response = requests.post(
                     f"{self.model_server_url}/generate",
                     json={
-                        "prompt": message,
+                        "prompt": prompt,
                         "max_length": 128,
                         "temperature": 0.7
                     },
