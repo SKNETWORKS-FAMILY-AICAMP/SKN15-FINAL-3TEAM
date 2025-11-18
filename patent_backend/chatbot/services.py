@@ -97,12 +97,12 @@ class LlamaChatService(BaseChatService):
                 return f"오늘의 점심 메뉴 추천드립니다:\n" + "\n".join(f"• {menu}" for menu in menus)
 
         try:
-            # 대화 기록을 포함한 프롬프트 구성 (관련 대화만)
+            # 시스템 프롬프트로 대화 기록 숨기기 (참조만 가능)
             prompt = message
             if conversation_history and len(conversation_history) > 0:
                 # 최근 3개 대화만 포함하되, 점심 메뉴 관련 대화는 제외
                 recent_history = []
-                for msg in conversation_history[-6:]:  # 최근 6개 확인
+                for msg in conversation_history[-6:]:
                     content = msg.get('content', '')
                     # 점심 메뉴, 에러 메시지 제외
                     if ('점심' not in content and '메뉴' not in content and
@@ -115,11 +115,21 @@ class LlamaChatService(BaseChatService):
                 recent_history = recent_history[-3:]
 
                 if recent_history:
-                    history_text = "\n".join([
-                        f"{'사용자' if msg['type'] == 'user' else 'AI'}: {msg['content']}"
+                    # 시스템 프롬프트 형식: 대화 맥락은 제공하되 직접 언급하지 않게 유도
+                    history_context = "\n".join([
+                        f"- {msg['type']}: {msg['content']}"
                         for msg in recent_history
                     ])
-                    prompt = f"{history_text}\n사용자: {message}\nAI:"
+                    prompt = f"""[대화 맥락 - 참고만 하고 직접 언급하지 말 것]
+{history_context}
+
+[현재 사용자 질문]
+{message}
+
+[답변 지침]
+- 위 대화 맥락을 참고하되, "이전에 말씀하신..." 같은 직접적인 언급은 하지 말 것
+- 자연스럽게 맥락을 이해한 답변을 제공할 것
+- 간결하고 명확하게 답변할 것"""
 
             # 모델 서버에 POST 요청
             response = requests.post(
@@ -310,7 +320,7 @@ class RAGChatService(BaseChatService):
         # 일반 질문은 기존 LLaMA 서비스 사용
         else:
             try:
-                # 대화 기록을 포함한 프롬프트 구성 (관련 대화만)
+                # 시스템 프롬프트로 대화 기록 숨기기 (참조만 가능)
                 prompt = message
                 if conversation_history and len(conversation_history) > 0:
                     # 최근 3개 대화만 포함하되, 점심 메뉴 관련 대화는 제외
@@ -329,11 +339,21 @@ class RAGChatService(BaseChatService):
                     recent_history = recent_history[-3:]
 
                     if recent_history:
-                        history_text = "\n".join([
-                            f"{'사용자' if msg['type'] == 'user' else 'AI'}: {msg['content']}"
+                        # 시스템 프롬프트 형식: 대화 맥락은 제공하되 직접 언급하지 않게 유도
+                        history_context = "\n".join([
+                            f"- {msg['type']}: {msg['content']}"
                             for msg in recent_history
                         ])
-                        prompt = f"{history_text}\n사용자: {message}\nAI:"
+                        prompt = f"""[대화 맥락 - 참고만 하고 직접 언급하지 말 것]
+{history_context}
+
+[현재 사용자 질문]
+{message}
+
+[답변 지침]
+- 위 대화 맥락을 참고하되, "이전에 말씀하신..." 같은 직접적인 언급은 하지 말 것
+- 자연스럽게 맥락을 이해한 답변을 제공할 것
+- 간결하고 명확하게 답변할 것"""
 
                 response = requests.post(
                     f"{self.model_server_url}/generate",
