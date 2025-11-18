@@ -80,8 +80,8 @@ try:
         llm_base_model_name,
         trust_remote_code=True,
         torch_dtype=torch.float16 if device == "cuda" else torch.float32,
-        device_map="auto"
-    )
+        low_cpu_mem_usage=True
+    ).to(device)
 
     # LoRA 어댑터 로드
     llm_model = PeftModel.from_pretrained(
