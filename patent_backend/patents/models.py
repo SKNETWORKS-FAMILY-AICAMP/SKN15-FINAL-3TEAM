@@ -5,6 +5,7 @@
 from django.db import models
 from django.contrib.postgres.search import SearchVectorField
 from django.contrib.postgres.indexes import GinIndex
+from pgvector.django import VectorField
 
 
 class Patent(models.Model):
@@ -254,3 +255,64 @@ class OpinionDocument(models.Model):
 
     def __str__(self):
         return f"{self.application_number} - 의견 제출 통지서"
+
+
+class PatentRAGDocument(models.Model):
+    """RAG용 특허 문서 모델 (벡터 검색)"""
+
+    doc_id = models.CharField(
+        max_length=50,
+        primary_key=True,
+        verbose_name='문서ID'
+    )
+    application_number = models.CharField(
+        max_length=50,
+        verbose_name='출원번호',
+        db_index=True
+    )
+    title_ko = models.TextField(
+        verbose_name='발명의 명칭(한글)',
+        blank=True,
+        null=True
+    )
+    title_en = models.TextField(
+        verbose_name='발명의 명칭(영문)',
+        blank=True,
+        null=True
+    )
+    ipc = models.TextField(
+        verbose_name='IPC 분류',
+        blank=True,
+        null=True
+    )
+    text = models.TextField(
+        verbose_name='특허 전문 텍스트'
+    )
+    source_ids = models.CharField(
+        max_length=255,
+        verbose_name='출처 파일',
+        blank=True,
+        null=True
+    )
+
+    # BGE-M3 모델 벡터 (1024차원)
+    embedding = VectorField(
+        dimensions=1024,
+        verbose_name='임베딩 벡터'
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='데이터 생성일'
+    )
+
+    class Meta:
+        db_table = 'patent_rag_documents'
+        verbose_name = 'RAG 특허 문서'
+        verbose_name_plural = 'RAG 특허 문서 목록'
+        indexes = [
+            models.Index(fields=['application_number']),
+        ]
+
+    def __str__(self):
+        return f"{self.doc_id} - {self.title_ko[:50] if self.title_ko else 'N/A'}"

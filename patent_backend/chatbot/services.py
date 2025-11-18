@@ -9,6 +9,7 @@ import logging
 import re
 from django.conf import settings
 from .lunch_data import get_all_menu_items, get_random_menu, get_menu_by_category, get_random_menu_by_category, LUNCH_MENU
+from .rag_service import RAGService
 
 logger = logging.getLogger(__name__)
 
@@ -198,6 +199,129 @@ class CustomModelChatService(BaseChatService):
             return f"오류가 발생했습니다: {str(e)}"
 
 
+class RAGChatService(BaseChatService):
+    """RAG 기반 특허 검색 챗봇 서비스"""
+
+    def __init__(self):
+        self.rag_service = RAGService()
+        self.model_server_url = getattr(
+            settings,
+            'MODEL_SERVER_URL',
+            'http://localhost:8001'
+        )
+
+    def _detect_patent_search(self, message: str) -> bool:
+        """특허 검색 요청인지 감지"""
+        keywords = [
+            '특허', '유사', '검색', '찾아', '관련',
+            '비슷한', 'patent', 'similar', 'search'
+        ]
+        return any(keyword in message.lower() for keyword in keywords)
+
+    def generate_response(self, message: str, file_content: Optional[str] = None,
+                         conversation_history: Optional[List[Dict]] = None) -> str:
+        """RAG를 사용한 응답 생성"""
+
+        # 점심 메뉴 요청인지 먼저 확인
+        is_lunch, category = detect_lunch_request(message)
+        if is_lunch:
+            if category:
+                menus = get_random_menu_by_category(category, 3)
+                return f"오늘 {category} 메뉴 추천드립니다:\n" + "\n".join(f"• {menu}" for menu in menus)
+            else:
+                menus = get_random_menu(3)
+                return f"오늘의 점심 메뉴 추천드립니다:\n" + "\n".join(f"• {menu}" for menu in menus)
+
+        # 특허 검색 요청인지 확인
+        if self._detect_patent_search(message):
+            try:
+                # RAG 검색 수행
+                search_results = self.rag_service.search(message, top_k=3)
+
+                if not search_results:
+                    return "죄송합니다. 관련된 특허를 찾지 못했습니다."
+
+                # Runpod 모델 서버의 /rag/pipeline 엔드포인트 사용
+                # RAG → 분류 → LLM 전체 파이프라인 실행
+                try:
+                    response = requests.post(
+                        f"{self.model_server_url}/rag/pipeline",
+                        json={
+                            "query": message,
+                            "patents": search_results,
+                            "use_classification": True,  # 분류 모델 사용
+                            "max_length": 512
+                        },
+                        timeout=120  # 파이프라인은 시간이 더 걸릴 수 있음
+                    )
+
+                    if response.status_code == 200:
+                        data = response.json()
+                        return data.get('response', '응답 생성 실패')
+                    else:
+                        # 파이프라인 실패 시 검색 결과만 반환
+                        context = "\n\n".join([
+                            f"[특허 {i+1}] {result['application_number']}\n"
+                            f"제목: {result['title_ko']}\n"
+                            f"IPC: {result['ipc']}\n"
+                            f"유사도: {result['similarity']:.2%}\n"
+                            f"내용: {result['text'][:300]}..."
+                            for i, result in enumerate(search_results)
+                        ])
+                        return f"관련 특허 {len(search_results)}개를 찾았습니다:\n\n{context}"
+
+                except requests.exceptions.RequestException as e:
+                    logger.error(f"모델 서버 파이프라인 실패: {e}")
+                    # 모델 서버 연결 실패 시 검색 결과만 반환
+                    context = "\n\n".join([
+                        f"[특허 {i+1}] {result['application_number']}\n"
+                        f"제목: {result['title_ko']}\n"
+                        f"유사도: {result['similarity']:.2%}"
+                        for i, result in enumerate(search_results)
+                    ])
+                    return f"관련 특허 {len(search_results)}개를 찾았습니다:\n\n{context}"
+
+            except Exception as e:
+                logger.error(f"RAG 검색 실패: {e}")
+                return f"특허 검색 중 오류가 발생했습니다: {str(e)}"
+
+        # 일반 질문은 기존 LLaMA 서비스 사용
+        else:
+            try:
+                # 파일 내용이 있으면 컨텍스트에 추가
+                context = file_content if file_content else ""
+
+                # 대화 기록 추가
+                if conversation_history:
+                    history_text = "\n".join([
+                        f"{msg['type']}: {msg['content']}"
+                        for msg in conversation_history[-5:]  # 최근 5개만
+                    ])
+                    context = f"{history_text}\n\n{context}"
+
+                prompt = f"{context}\n\n사용자: {message}\nAI:" if context else message
+
+                response = requests.post(
+                    f"{self.model_server_url}/generate",
+                    json={
+                        "prompt": prompt,
+                        "max_length": 512,
+                        "temperature": 0.7
+                    },
+                    timeout=60
+                )
+
+                if response.status_code == 200:
+                    data = response.json()
+                    return data.get('response', '응답 생성 실패')
+                else:
+                    return "죄송합니다. 응답 생성에 실패했습니다."
+
+            except requests.exceptions.RequestException as e:
+                logger.error(f"모델 서버 연결 실패: {e}")
+                return "죄송합니다. 현재 AI 서비스에 연결할 수 없습니다."
+
+
 class ChatServiceFactory:
     """챗봇 서비스 팩토리 - 설정에 따라 적절한 모델 선택"""
 
@@ -209,17 +333,20 @@ class ChatServiceFactory:
         settings.CHATBOT_SERVICE 값에 따라:
         - 'llama': LLaMA 모델 (기본값)
         - 'custom': 사용자 정의 모델 (멀티턴 지원)
+        - 'rag': RAG 기반 특허 검색 챗봇
         """
-        service_type = getattr(settings, 'CHATBOT_SERVICE', 'llama')
+        service_type = getattr(settings, 'CHATBOT_SERVICE', 'rag')
 
         if service_type == 'llama':
             return LlamaChatService()
         elif service_type == 'custom':
             return CustomModelChatService()
+        elif service_type == 'rag':
+            return RAGChatService()
         else:
-            # 기본값으로 LLaMA 사용
-            logger.warning(f"알 수 없는 서비스 타입 '{service_type}', LLaMA 사용")
-            return LlamaChatService()
+            # 기본값으로 RAG 사용
+            logger.warning(f"알 수 없는 서비스 타입 '{service_type}', RAG 사용")
+            return RAGChatService()
 
 
 # 싱글톤 패턴으로 서비스 인스턴스 관리
