@@ -296,25 +296,37 @@ def rag_pipeline(request: RAGPipelineRequest):
         else:
             classified_patents = request.patents
 
-        # 2. LLM 프롬프트 구성
-        context = "\n\n".join([
-            f"[특허 {i+1}] {p['application_number']}\n"
-            f"제목: {p.get('title_ko', 'N/A')}\n"
-            f"IPC: {p.get('ipc', 'N/A')}\n"
-            + (f"분류 결과: {p.get('classification', {}).get('predictions', [{}])[0].get('class_id', 'N/A')}\n"
-               if request.use_classification else "")
-            + f"내용: {p.get('text', '')[:300]}..."
-            for i, p in enumerate(classified_patents)
-        ])
+        # 2. LLM 프롬프트 구성 (특허 분석용 Chat Template)
+        # 유사 특허 목록 생성
+        similar_claims_text = ""
+        mappings = []
+        for i, p in enumerate(classified_patents, 1):
+            app_no = p.get('application_number', 'N/A')
+            title = p.get('title_ko', 'N/A')
+            text = p.get('text', '')[:300]
+            similar_claims_text += f"{i}) [출원번호: {app_no}]\n제목: {title}\n내용: {text}...\n\n"
+            mappings.append(f"- 인용발명{i}: 출원번호 {app_no}")
 
-        prompt = f"""다음은 검색된 관련 특허 정보입니다:
+        # Qwen Chat Template 형식으로 구성
+        system_msg = (
+            "You are Qwen, a helpful patent analysis assistant.\n"
+            "규칙:\n"
+            "1) 반드시 한국어만 사용하고 중국어, 일본어 등 외국어(한자 포함)를 절대 사용하지 마십시오.\n"
+            "2) 출력은 한 단락의 한국어 공식 문장으로만 작성하십시오.\n"
+            "3) 본문에서 인용발명을 언급할 때는 반드시 '인용발명N(출원번호 XXXXX)' 형식으로 표기하십시오.\n"
+        )
 
-{context}
+        user_msg = (
+            f"다음 유사 특허 정보를 바탕으로 사용자 질문에 답변해주세요.\n\n"
+            f"[사용자 질문]\n{request.query}\n\n"
+            f"[유사 특허 목록 (상위 {len(classified_patents)}개)]\n{similar_claims_text}\n"
+            f"[인용발명 라벨-출원번호 매핑]\n" + "\n".join(mappings) + "\n\n"
+            "주의: 본문에서 인용발명을 언급할 때는 반드시 '인용발명N(출원번호 XXXXX)' 형식으로 표기하고, "
+            "한국어만 사용하며 간결하게 작성하라."
+        )
 
-사용자 질문: {request.query}
-
-위 특허 정보를 참고하여 사용자의 질문에 답변해주세요.
-특허 번호와 제목을 언급하면서 명확하게 설명해주세요."""
+        # Qwen Chat Template 형식
+        prompt = f"<|im_start|>system\n{system_msg}<|im_end|>\n<|im_start|>user\n{user_msg}<|im_end|>\n<|im_start|>assistant"
 
         # 3. LLM 답변 생성
         if LLM_AVAILABLE:
@@ -342,7 +354,7 @@ def rag_pipeline(request: RAGPipelineRequest):
                 "query": request.query,
                 "patents_used": len(classified_patents),
                 "classified": request.use_classification and CLASSIFICATION_AVAILABLE,
-                "response": f"관련 특허 {len(classified_patents)}개를 찾았습니다:\n\n{context}",
+                "response": f"관련 특허 {len(classified_patents)}개를 찾았습니다:\n\n{similar_claims_text}",
                 "metadata": {"llm_available": False}
             }
 
