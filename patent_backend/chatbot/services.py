@@ -231,7 +231,19 @@ class RAGChatService(BaseChatService):
     """RAG 기반 특허 검색 챗봇 서비스"""
 
     def __init__(self):
-        self.rag_service = RAGService()
+        # OpenAI 사용 여부 확인
+        use_openai = os.getenv('USE_OPENAI_RAG', 'false').lower() == 'true'
+
+        if use_openai:
+            from .openai_rag_service import OpenAIRAGService
+            self.rag_service = OpenAIRAGService()
+            self.use_openai = True
+            logger.info("✅ OpenAI RAG 서비스 사용")
+        else:
+            self.rag_service = RAGService()
+            self.use_openai = False
+            logger.info("✅ Runpod RAG 서비스 사용")
+
         self.model_server_url = getattr(
             settings,
             'MODEL_SERVER_URL',
@@ -263,6 +275,15 @@ class RAGChatService(BaseChatService):
         # 특허 검색 요청인지 확인
         if self._detect_patent_search(message):
             try:
+                # OpenAI 사용 시 전체 파이프라인을 한 번에 처리
+                if self.use_openai:
+                    return self.rag_service.rag_pipeline(
+                        query=message,
+                        use_classification=True,
+                        top_k=3
+                    )
+
+                # Runpod 사용 시 기존 로직
                 # RAG 검색 수행
                 search_results = self.rag_service.search(message, top_k=3)
 

@@ -71,3 +71,4 @@ whitenoise==6.6.0
 
 # Monitoring (선택)
 # sentry-sdk==1.40.0
+openai>=1.0.0
