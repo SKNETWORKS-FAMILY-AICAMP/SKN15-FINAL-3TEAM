@@ -101,13 +101,23 @@ logger.info("📦 SLLM (거절 이유 분석) 모델 로딩...")
 sllm_adapter_path = "/workspace/models/checkpoint-16"  # checkpoint-16 경로
 
 try:
-    # SLLM은 LLM과 같은 베이스 모델 사용 (Qwen2.5-14B)
-    # 토크나이저도 동일
+    # SLLM은 LLM과 같은 베이스 모델 사용하지만, 별도로 로드해야 함
+    # (한 베이스 모델에 두 개의 LoRA를 동시에 로드할 수 없음)
+
+    # SLLM 토크나이저 (LLM과 동일)
     sllm_tokenizer = llm_tokenizer  # 재사용
 
-    # SLLM 모델 로드 (베이스 모델 + checkpoint-16 LoRA)
+    # SLLM용 베이스 모델 별도 로드
+    sllm_base_model = AutoModelForCausalLM.from_pretrained(
+        llm_base_model_name,  # "Qwen/Qwen2.5-14B-Instruct"
+        trust_remote_code=True,
+        torch_dtype=torch.float16 if device == "cuda" else torch.float32,
+        low_cpu_mem_usage=True
+    ).to(device)
+
+    # checkpoint-16 LoRA 어댑터 로드
     sllm_model = PeftModel.from_pretrained(
-        llm_base_model,  # 같은 베이스 모델 재사용
+        sllm_base_model,
         sllm_adapter_path
     )
     sllm_model.eval()
@@ -234,8 +244,10 @@ def classify_patents(request: ClassifyRequest):
 
             predictions = []
             for prob, idx in zip(top_k_probs.cpu(), top_k_indices.cpu()):
+                class_id = int(idx)
                 predictions.append({
-                    "class_id": int(idx),
+                    "class_id": class_id,
+                    "label": f"label_{class_id}",  # label_0 (등록) 또는 label_1 (거절)
                     "confidence": float(prob)
                 })
 
