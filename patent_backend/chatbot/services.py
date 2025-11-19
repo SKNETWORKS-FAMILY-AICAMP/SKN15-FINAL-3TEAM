@@ -7,6 +7,7 @@ from typing import List, Dict, Optional
 import requests
 import logging
 import re
+import os
 from django.conf import settings
 from .lunch_data import get_all_menu_items, get_random_menu, get_menu_by_category, get_random_menu_by_category, LUNCH_MENU
 from .rag_service import RAGService
