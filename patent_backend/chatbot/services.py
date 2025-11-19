@@ -398,11 +398,19 @@ class ChatServiceFactory:
         """
         설정에 따라 적절한 챗봇 서비스 인스턴스 반환
 
-        settings.CHATBOT_SERVICE 값에 따라:
-        - 'llama': LLaMA 모델 (기본값)
-        - 'custom': 사용자 정의 모델 (멀티턴 지원)
-        - 'rag': RAG 기반 특허 검색 챗봇
+        우선순위:
+        1. USE_SIMPLE_OPENAI=true → Simple OpenAI (RAG/분류 없이 순수 OpenAI만)
+        2. settings.CHATBOT_SERVICE 값에 따라:
+           - 'llama': LLaMA 모델
+           - 'custom': 사용자 정의 모델 (멀티턴 지원)
+           - 'rag': RAG 기반 특허 검색 챗봇
         """
+        # 최우선: Simple OpenAI 모드
+        if os.getenv('USE_SIMPLE_OPENAI', 'false').lower() == 'true':
+            from .simple_openai_service import SimpleOpenAIChatService
+            logger.info("✅ Simple OpenAI 챗봇 서비스 사용 (RAG/분류 없음)")
+            return SimpleOpenAIChatService()
+
         service_type = getattr(settings, 'CHATBOT_SERVICE', 'rag')
 
         if service_type == 'llama':
