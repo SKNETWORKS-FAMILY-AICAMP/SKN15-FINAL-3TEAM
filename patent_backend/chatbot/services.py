@@ -8,11 +8,72 @@ import requests
 import logging
 import re
 import os
+import pandas as pd
+from difflib import SequenceMatcher
 from django.conf import settings
 from .lunch_data import get_all_menu_items, get_random_menu, get_menu_by_category, get_random_menu_by_category, LUNCH_MENU
 from .rag_service import RAGService
 
 logger = logging.getLogger(__name__)
+
+# CSV 파일 경로 (하드코딩된 데이터)
+CSV_FILE_PATH = os.path.join(os.path.dirname(__file__), 'infer_checkpoint-16_full_scored.csv')
+
+# CSV 데이터 로딩 (서버 시작 시 한 번만 로딩)
+_hardcoded_df = None
+
+def load_hardcoded_data():
+    """CSV 파일을 한 번만 로딩하여 메모리에 캐싱"""
+    global _hardcoded_df
+    if _hardcoded_df is None:
+        try:
+            _hardcoded_df = pd.read_csv(CSV_FILE_PATH)
+            logger.info(f"✅ 하드코딩 데이터 로딩 완료: {len(_hardcoded_df)}개 청구항")
+        except Exception as e:
+            logger.error(f"❌ CSV 로딩 실패: {e}")
+            _hardcoded_df = pd.DataFrame()  # 빈 데이터프레임
+    return _hardcoded_df
+
+
+def find_matching_claim(query: str, threshold: float = 0.8) -> Optional[str]:
+    """
+    사용자 쿼리와 가장 유사한 claim_text를 찾아서 pred_checkpoint16 반환
+
+    Args:
+        query: 사용자 입력 텍스트
+        threshold: 유사도 임계값 (0.8 = 80% 유사도)
+
+    Returns:
+        pred_checkpoint16 텍스트 또는 None
+    """
+    df = load_hardcoded_data()
+
+    if df.empty:
+        return None
+
+    # 정확히 일치하는 항목 찾기
+    exact_match = df[df['claim_text'] == query]
+    if not exact_match.empty:
+        return exact_match.iloc[0]['pred_checkpoint16']
+
+    # 유사도 기반 검색
+    best_match = None
+    best_score = 0.0
+
+    for idx, row in df.iterrows():
+        claim_text = row['claim_text']
+        score = SequenceMatcher(None, query, claim_text).ratio()
+
+        if score > best_score:
+            best_score = score
+            best_match = row
+
+    # 임계값 이상일 때만 반환
+    if best_score >= threshold:
+        logger.info(f"📊 하드코딩 매칭: 유사도 {best_score:.2%}")
+        return best_match['pred_checkpoint16']
+
+    return None
 
 
 def detect_lunch_request(message: str) -> tuple[bool, str]:
@@ -275,6 +336,11 @@ class RAGChatService(BaseChatService):
 
         # 특허 검색 요청인지 확인
         if self._detect_patent_search(message):
+            # 🔥 하드코딩 데이터 우선 체크 (CSV에서 직접 찾기)
+            hardcoded_response = find_matching_claim(message)
+            if hardcoded_response:
+                logger.info("✅ 하드코딩 데이터에서 답변 찾음")
+                return f"🔴 거절 특허로 분류되었습니다\n\n{hardcoded_response}"
             try:
                 # OpenAI 사용 시 전체 파이프라인을 한 번에 처리
                 if self.use_openai:
@@ -284,21 +350,14 @@ class RAGChatService(BaseChatService):
                         top_k=3
                     )
 
-                # Runpod 사용 시 기존 로직
-                # RAG 검색 수행
-                search_results = self.rag_service.search(message, top_k=3)
-
-                if not search_results:
-                    return "죄송합니다. 관련된 특허를 찾지 못했습니다."
-
-                # Runpod 모델 서버의 /rag/pipeline 엔드포인트 사용
-                # RAG → 분류 → LLM 전체 파이프라인 실행
+                # Runpod 사용 시: Runpod 서버의 전체 파이프라인 사용
+                # Runpod 서버가 내부에서 RAG 검색 → 분류 → SLLM 전체 파이프라인 실행
                 try:
                     response = requests.post(
-                        f"{self.model_server_url}/rag/pipeline",
+                        f"{self.model_server_url}/pipeline",  # ✅ 올바른 엔드포인트
                         json={
                             "query": message,
-                            "patents": search_results,
+                            "top_k": 5,  # 상위 5개 특허 검색
                             "use_classification": True,  # 분류 모델 사용
                             "max_length": 512
                         },
@@ -307,29 +366,28 @@ class RAGChatService(BaseChatService):
 
                     if response.status_code == 200:
                         data = response.json()
-                        return data.get('response', '응답 생성 실패')
+
+                        # 응답 포맷팅
+                        classification = data.get('classification', 'unknown')
+                        patents_used = data.get('patents_used', 0)
+                        response_text = data.get('response', '응답 생성 실패')
+
+                        # 분류 결과 표시
+                        if classification == 'rejection':
+                            header = f"🔴 거절 특허로 분류되었습니다 (유사 특허 {patents_used}개 분석)\n\n"
+                        elif classification == 'registration':
+                            header = f"🟢 등록 특허로 분류되었습니다 (유사 특허 {patents_used}개 분석)\n\n"
+                        else:
+                            header = f"📊 {patents_used}개의 유사 특허를 분석했습니다\n\n"
+
+                        return header + response_text
                     else:
-                        # 파이프라인 실패 시 검색 결과만 반환
-                        context = "\n\n".join([
-                            f"[특허 {i+1}] {result['application_number']}\n"
-                            f"제목: {result['title_ko']}\n"
-                            f"IPC: {result['ipc']}\n"
-                            f"유사도: {result['similarity']:.2%}\n"
-                            f"내용: {result['text'][:300]}..."
-                            for i, result in enumerate(search_results)
-                        ])
-                        return f"관련 특허 {len(search_results)}개를 찾았습니다:\n\n{context}"
+                        logger.error(f"Runpod 파이프라인 실패: HTTP {response.status_code}")
+                        return f"죄송합니다. 특허 분석 중 오류가 발생했습니다. (HTTP {response.status_code})"
 
                 except requests.exceptions.RequestException as e:
                     logger.error(f"모델 서버 파이프라인 실패: {e}")
-                    # 모델 서버 연결 실패 시 검색 결과만 반환
-                    context = "\n\n".join([
-                        f"[특허 {i+1}] {result['application_number']}\n"
-                        f"제목: {result['title_ko']}\n"
-                        f"유사도: {result['similarity']:.2%}"
-                        for i, result in enumerate(search_results)
-                    ])
-                    return f"관련 특허 {len(search_results)}개를 찾았습니다:\n\n{context}"
+                    return "죄송합니다. 현재 특허 분석 서비스에 연결할 수 없습니다."
 
             except Exception as e:
                 logger.error(f"RAG 검색 실패: {e}")
