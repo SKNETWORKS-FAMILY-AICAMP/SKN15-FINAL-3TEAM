@@ -10,6 +10,7 @@ import re
 import os
 import pandas as pd
 import time
+import random
 from difflib import SequenceMatcher
 from django.conf import settings
 from .lunch_data import get_all_menu_items, get_random_menu, get_menu_by_category, get_random_menu_by_category, LUNCH_MENU
@@ -329,8 +330,10 @@ class RAGChatService(BaseChatService):
         hardcoded_response = find_matching_claim(message, threshold=0.7)  # 70% 유사도로 낮춤
         if hardcoded_response:
             logger.info("✅ 하드코딩 데이터에서 답변 찾음")
-            # 챗봇이 생각하는 것처럼 3초 딜레이
-            time.sleep(3)
+            # 챗봇이 생각하는 것처럼 5~10초 랜덤 딜레이
+            delay = random.uniform(5, 10)
+            logger.info(f"⏰ {delay:.1f}초 대기 중...")
+            time.sleep(delay)
             return f"🔴 거절 특허로 분류되었습니다\n\n{hardcoded_response}"
 
         # 2순위: 점심 메뉴 요청 확인
