@@ -63,41 +63,19 @@ except Exception as e:
     logger.warning(f"⚠️ 분류 모델 로드 실패: {e}. 분류 기능 비활성화")
     CLASSIFICATION_AVAILABLE = False
 
-# 3. Qwen2.5-14B 베이스 모델 (등록건용 - 튜닝 안 된 원본)
-logger.info("📦 Qwen2.5-14B 베이스 모델 로딩 (등록건용)...")
+# 3. SLLM (Qwen2.5-14B + qwen-14b LoRA) - 등록/거절 모두 처리
+logger.info("📦 SLLM (특허 분석) 모델 로딩...")
 base_model_name = "Qwen/Qwen2.5-14B-Instruct"
+sllm_adapter_path = "/workspace/models/qwen-14b"  # checkpoint-16 LoRA 어댑터
 
 try:
-    # 베이스 모델 토크나이저
-    base_tokenizer = AutoTokenizer.from_pretrained(
+    # SLLM 토크나이저
+    sllm_tokenizer = AutoTokenizer.from_pretrained(
         base_model_name,
         trust_remote_code=True
     )
 
-    # 베이스 모델 (등록건용 - LoRA 없음)
-    base_model = AutoModelForCausalLM.from_pretrained(
-        base_model_name,
-        trust_remote_code=True,
-        torch_dtype=torch.float16 if device == "cuda" else torch.float32,
-        low_cpu_mem_usage=True
-    ).to(device)
-    base_model.eval()
-    logger.info("✅ Qwen2.5-14B 베이스 모델 로드 완료 (등록건용)")
-
-    BASE_MODEL_AVAILABLE = True
-except Exception as e:
-    logger.warning(f"⚠️ 베이스 모델 로드 실패: {e}. 등록건 분석 기능 비활성화")
-    BASE_MODEL_AVAILABLE = False
-
-# 4. SLLM (Qwen2.5-14B + qwen-14b LoRA) - 거절 이유 분석 전문 모델
-logger.info("📦 SLLM (거절 이유 분석) 모델 로딩...")
-sllm_adapter_path = "/workspace/models/qwen-14b"  # checkpoint-16 LoRA 어댑터
-
-try:
-    # SLLM 토크나이저 (베이스 모델과 동일)
-    sllm_tokenizer = base_tokenizer  # 재사용
-
-    # SLLM용 베이스 모델 별도 로드
+    # SLLM용 베이스 모델 로드
     sllm_base_model = AutoModelForCausalLM.from_pretrained(
         base_model_name,  # "Qwen/Qwen2.5-14B-Instruct"
         trust_remote_code=True,
@@ -111,7 +89,7 @@ try:
         sllm_adapter_path
     )
     sllm_model.eval()
-    logger.info("✅ SLLM (거절 분석) 모델 로드 완료")
+    logger.info("✅ SLLM (특허 분석) 모델 로드 완료")
 
     SLLM_AVAILABLE = True
 except Exception as e:
@@ -162,7 +140,6 @@ def root():
         "models": {
             "embedding": "BAAI/bge-m3",
             "classification": f"Qwen2.5-7B + LoRA ({'available' if CLASSIFICATION_AVAILABLE else 'unavailable'})",
-            "base_model": f"Qwen2.5-14B Base ({'available' if BASE_MODEL_AVAILABLE else 'unavailable'})",
             "sllm": f"Qwen2.5-14B + SLLM LoRA ({'available' if SLLM_AVAILABLE else 'unavailable'})"
         }
     }
@@ -256,13 +233,13 @@ def classify_patents(request: ClassifyRequest):
 
 @app.post("/generate")
 def generate_response(request: LLMRequest):
-    """베이스 모델을 사용한 답변 생성 (등록건용)"""
-    if not BASE_MODEL_AVAILABLE:
-        raise HTTPException(status_code=503, detail="베이스 모델을 사용할 수 없습니다")
+    """SLLM을 사용한 답변 생성 (등록/거절 모두)"""
+    if not SLLM_AVAILABLE:
+        raise HTTPException(status_code=503, detail="SLLM 모델을 사용할 수 없습니다")
 
     try:
         # 토큰화
-        inputs = base_tokenizer(
+        inputs = sllm_tokenizer(
             request.prompt,
             return_tensors="pt",
             truncation=True,
@@ -271,18 +248,18 @@ def generate_response(request: LLMRequest):
 
         # 생성
         with torch.no_grad():
-            outputs = base_model.generate(
+            outputs = sllm_model.generate(
                 **inputs,
                 max_new_tokens=request.max_length,
                 temperature=request.temperature,
                 top_p=request.top_p,
                 do_sample=True,
-                pad_token_id=base_tokenizer.pad_token_id,
-                eos_token_id=base_tokenizer.eos_token_id
+                pad_token_id=sllm_tokenizer.pad_token_id,
+                eos_token_id=sllm_tokenizer.eos_token_id
             )
 
         # 디코딩
-        response = base_tokenizer.decode(
+        response = sllm_tokenizer.decode(
             outputs[0][inputs['input_ids'].shape[1]:],
             skip_special_tokens=True
         )
@@ -414,9 +391,9 @@ def rag_pipeline(request: RAGPipelineRequest):
                 }
             }
 
-        # 4. 등록건 → 베이스 모델 사용
+        # 4. 등록건 → SLLM 사용 (프롬프트로 차별화)
         else:
-            logger.info("🟢 등록 건 감지 → 베이스 모델 사용")
+            logger.info("🟢 등록 건 감지 → SLLM 사용 (등록 관점 프롬프트)")
 
             # 등록건 프롬프트 구성
             system_msg = (
@@ -437,8 +414,8 @@ def rag_pipeline(request: RAGPipelineRequest):
 
             prompt = f"<|im_start|>system\n{system_msg}<|im_end|>\n<|im_start|>user\n{user_msg}<|im_end|>\n<|im_start|>assistant"
 
-            if BASE_MODEL_AVAILABLE:
-                base_response = generate_response(
+            if SLLM_AVAILABLE:
+                sllm_response = generate_response(
                     LLMRequest(
                         prompt=prompt,
                         max_length=request.max_length
@@ -450,15 +427,15 @@ def rag_pipeline(request: RAGPipelineRequest):
                     "patents_used": len(classified_patents),
                     "classified": request.use_classification and CLASSIFICATION_AVAILABLE,
                     "classification": "registration",
-                    "model_used": "Base Model (Qwen2.5-14B)",
-                    "response": base_response['response'],
+                    "model_used": "SLLM (registration mode)",
+                    "response": sllm_response['response'],
                     "metadata": {
-                        "prompt_length": base_response['prompt_length'],
-                        "generated_length": base_response['generated_length']
+                        "prompt_length": sllm_response['prompt_length'],
+                        "generated_length": sllm_response['generated_length']
                     }
                 }
             else:
-                # 베이스 모델 사용 불가 시 단순 메시지 반환
+                # SLLM 사용 불가 시 단순 메시지 반환
                 return {
                     "query": request.query,
                     "patents_used": len(classified_patents),
@@ -466,7 +443,7 @@ def rag_pipeline(request: RAGPipelineRequest):
                     "classification": "registration",
                     "model_used": "None",
                     "response": f"제출하신 청구항은 등록된 특허로 분류되었습니다. 관련 유사 특허 {len(classified_patents)}개를 찾았습니다.",
-                    "metadata": {"base_model_available": False}
+                    "metadata": {"sllm_available": False}
                 }
 
     except Exception as e:
@@ -484,7 +461,6 @@ def health_check():
         "models": {
             "embedding": True,
             "classification": CLASSIFICATION_AVAILABLE,
-            "base_model": BASE_MODEL_AVAILABLE,
             "sllm": SLLM_AVAILABLE
         }
     }
