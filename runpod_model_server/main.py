@@ -361,12 +361,16 @@ def rag_pipeline(request: RAGPipelineRequest):
                 "3) 본문에서 인용발명을 언급할 때는 반드시 '인용발명N(출원번호 XXXXX)' 형식으로 표기하십시오.\n"
             )
 
+            # 선행문헌 정보 추출 (첫 번째 특허를 주 선행문헌으로)
+            prior_art_no = classified_patents[0].get('application_number', 'N/A') if classified_patents else 'N/A'
+
             user_msg = (
                 f"다음 (선행문헌/유사문서의 청구항 목록과 대상 청구항)을 바탕으로, "
                 f"거절 사유(신규성, 진보성, 명확성 등)를 판별하고 핵심 근거를 3줄 이내로 간결히 설명해줘. "
                 f"유사점과 차이점을 명확히 지적해.\n\n"
-                f"[사용자 질문]\n{request.query}\n\n"
-                f"[유사 특허 목록 (상위 {len(classified_patents)}개)]\n{similar_claims_text}\n"
+                f"[선행문헌/인용 번호]\n{prior_art_no}\n\n"
+                f"[대상 청구항 / 사용자 질문]\n{request.query}\n\n"
+                f"[유사 문서의 청구항 목록 (상위 {len(classified_patents)}개)]\n{similar_claims_text}"
                 f"[인용발명 라벨-출원번호 매핑]\n" + "\n".join(mappings) + "\n\n"
                 "주의: 본문에서 인용발명을 언급할 때는 반드시 '인용발명N(출원번호 XXXXX)' 형식으로 표기하고, "
                 "한국어만 사용하며 한 단락으로 작성하라."

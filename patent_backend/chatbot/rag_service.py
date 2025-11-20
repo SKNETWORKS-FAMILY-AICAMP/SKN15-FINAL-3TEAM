@@ -77,9 +77,9 @@ class RAGService:
             logger.info(f"쿼리 임베딩 생성 완료 (차원: {len(query_embedding)})")
 
             # 2. PostgreSQL에서 벡터 유사도 검색
-            # pgvector의 <=> 연산자: L2 거리 (작을수록 유사)
-            # pgvector의 <#> 연산자: 내적 (클수록 유사, 정규화된 벡터에서는 코사인 유사도)
-            # pgvector의 <-> 연산자: 코사인 거리 (작을수록 유사)
+            # FAISS와 동일한 방식: Inner Product (정규화된 벡터에서 코사인 유사도와 동일)
+            # pgvector의 <#> 연산자: 내적 (클수록 유사)
+            # 음수 내적으로 정렬하여 큰 값이 먼저 나오도록 함
 
             from django.db import connection
 
@@ -93,9 +93,9 @@ class RAGService:
                         ipc,
                         text,
                         source_ids,
-                        (embedding <=> %s::vector) AS distance
+                        (embedding <#> %s::vector) AS neg_inner_product
                     FROM patent_rag_documents
-                    ORDER BY distance
+                    ORDER BY neg_inner_product
                     LIMIT %s
                 """, [query_embedding, top_k])
 
@@ -107,6 +107,9 @@ class RAGService:
             # 3. 결과 포매팅
             formatted_results = []
             for result in results:
+                # FAISS와 동일: 내적 값이 유사도 (음수를 양수로 변환)
+                inner_product = -float(result['neg_inner_product'])
+
                 formatted_results.append({
                     'doc_id': result['doc_id'],
                     'application_number': result['application_number'],
@@ -114,8 +117,8 @@ class RAGService:
                     'title_en': result['title_en'],
                     'ipc': result['ipc'],
                     'text': result['text'][:1000],  # 텍스트는 1000자로 제한
-                    'distance': float(result['distance']),
-                    'similarity': 1 - float(result['distance'])  # 유사도 (1에 가까울수록 유사)
+                    'distance': 1 - inner_product,  # 거리 호환성 유지
+                    'similarity': inner_product  # FAISS와 동일한 유사도 (1에 가까울수록 유사)
                 })
 
             return formatted_results
