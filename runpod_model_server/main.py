@@ -63,65 +63,55 @@ except Exception as e:
     logger.warning(f"⚠️ 분류 모델 로드 실패: {e}. 분류 기능 비활성화")
     CLASSIFICATION_AVAILABLE = False
 
-# 3. Qwen2.5-14B 챗봇 모델 (LoRA 어댑터)
-logger.info("📦 Qwen2.5-14B 챗봇 모델 로딩...")
-llm_base_model_name = "Qwen/Qwen2.5-14B-Instruct"
-llm_adapter_path = "/workspace/models/qwen-14b"  # Runpod에서 모델 경로
+# 3. Qwen2.5-14B 베이스 모델 (등록건용 - 튜닝 안 된 원본)
+logger.info("📦 Qwen2.5-14B 베이스 모델 로딩 (등록건용)...")
+base_model_name = "Qwen/Qwen2.5-14B-Instruct"
 
 try:
-    # LLM 토크나이저
-    llm_tokenizer = AutoTokenizer.from_pretrained(
-        llm_base_model_name,
+    # 베이스 모델 토크나이저
+    base_tokenizer = AutoTokenizer.from_pretrained(
+        base_model_name,
         trust_remote_code=True
     )
 
-    # LLM 베이스 모델
-    llm_base_model = AutoModelForCausalLM.from_pretrained(
-        llm_base_model_name,
+    # 베이스 모델 (등록건용 - LoRA 없음)
+    base_model = AutoModelForCausalLM.from_pretrained(
+        base_model_name,
         trust_remote_code=True,
         torch_dtype=torch.float16 if device == "cuda" else torch.float32,
         low_cpu_mem_usage=True
     ).to(device)
+    base_model.eval()
+    logger.info("✅ Qwen2.5-14B 베이스 모델 로드 완료 (등록건용)")
 
-    # LoRA 어댑터 로드
-    llm_model = PeftModel.from_pretrained(
-        llm_base_model,
-        llm_adapter_path
-    )
-    llm_model.eval()
-    logger.info("✅ Qwen2.5-14B 챗봇 모델 로드 완료")
-
-    LLM_AVAILABLE = True
+    BASE_MODEL_AVAILABLE = True
 except Exception as e:
-    logger.warning(f"⚠️ LLM 모델 로드 실패: {e}. LLM 기능 비활성화")
-    LLM_AVAILABLE = False
+    logger.warning(f"⚠️ 베이스 모델 로드 실패: {e}. 등록건 분석 기능 비활성화")
+    BASE_MODEL_AVAILABLE = False
 
-# 4. SLLM (Qwen2.5-14B + checkpoint-16 LoRA) - 거절 이유 분석 전문 모델
+# 4. SLLM (Qwen2.5-14B + qwen-14b LoRA) - 거절 이유 분석 전문 모델
 logger.info("📦 SLLM (거절 이유 분석) 모델 로딩...")
-sllm_adapter_path = "/workspace/models/checkpoint-16"  # checkpoint-16 경로
+sllm_adapter_path = "/workspace/models/qwen-14b"  # checkpoint-16 LoRA 어댑터
 
 try:
-    # SLLM은 LLM과 같은 베이스 모델 사용하지만, 별도로 로드해야 함
-    # (한 베이스 모델에 두 개의 LoRA를 동시에 로드할 수 없음)
-
-    # SLLM 토크나이저 (LLM과 동일)
-    sllm_tokenizer = llm_tokenizer  # 재사용
+    # SLLM 토크나이저 (베이스 모델과 동일)
+    sllm_tokenizer = base_tokenizer  # 재사용
 
     # SLLM용 베이스 모델 별도 로드
     sllm_base_model = AutoModelForCausalLM.from_pretrained(
-        llm_base_model_name,  # "Qwen/Qwen2.5-14B-Instruct"
+        base_model_name,  # "Qwen/Qwen2.5-14B-Instruct"
         trust_remote_code=True,
         torch_dtype=torch.float16 if device == "cuda" else torch.float32,
         low_cpu_mem_usage=True
     ).to(device)
 
-    # checkpoint-16 LoRA 어댑터 로드
+    # qwen-14b (checkpoint-16) LoRA 어댑터 로드
     sllm_model = PeftModel.from_pretrained(
         sllm_base_model,
         sllm_adapter_path
     )
     sllm_model.eval()
-    logger.info("✅ SLLM (checkpoint-16) 모델 로드 완료")
+    logger.info("✅ SLLM (거절 분석) 모델 로드 완료")
 
     SLLM_AVAILABLE = True
 except Exception as e:
@@ -172,7 +162,8 @@ def root():
         "models": {
             "embedding": "BAAI/bge-m3",
             "classification": f"Qwen2.5-7B + LoRA ({'available' if CLASSIFICATION_AVAILABLE else 'unavailable'})",
-            "llm": f"Qwen2.5-14B + LoRA ({'available' if LLM_AVAILABLE else 'unavailable'})"
+            "base_model": f"Qwen2.5-14B Base ({'available' if BASE_MODEL_AVAILABLE else 'unavailable'})",
+            "sllm": f"Qwen2.5-14B + SLLM LoRA ({'available' if SLLM_AVAILABLE else 'unavailable'})"
         }
     }
 
@@ -265,13 +256,13 @@ def classify_patents(request: ClassifyRequest):
 
 @app.post("/generate")
 def generate_response(request: LLMRequest):
-    """LLM을 사용한 답변 생성"""
-    if not LLM_AVAILABLE:
-        raise HTTPException(status_code=503, detail="LLM 모델을 사용할 수 없습니다")
+    """베이스 모델을 사용한 답변 생성 (등록건용)"""
+    if not BASE_MODEL_AVAILABLE:
+        raise HTTPException(status_code=503, detail="베이스 모델을 사용할 수 없습니다")
 
     try:
         # 토큰화
-        inputs = llm_tokenizer(
+        inputs = base_tokenizer(
             request.prompt,
             return_tensors="pt",
             truncation=True,
@@ -280,18 +271,18 @@ def generate_response(request: LLMRequest):
 
         # 생성
         with torch.no_grad():
-            outputs = llm_model.generate(
+            outputs = base_model.generate(
                 **inputs,
                 max_new_tokens=request.max_length,
                 temperature=request.temperature,
                 top_p=request.top_p,
                 do_sample=True,
-                pad_token_id=llm_tokenizer.pad_token_id,
-                eos_token_id=llm_tokenizer.eos_token_id
+                pad_token_id=base_tokenizer.pad_token_id,
+                eos_token_id=base_tokenizer.eos_token_id
             )
 
         # 디코딩
-        response = llm_tokenizer.decode(
+        response = base_tokenizer.decode(
             outputs[0][inputs['input_ids'].shape[1]:],
             skip_special_tokens=True
         )
@@ -423,32 +414,31 @@ def rag_pipeline(request: RAGPipelineRequest):
                 }
             }
 
-        # 4. 등록건 또는 SLLM 사용 불가 시 일반 LLM 사용
+        # 4. 등록건 → 베이스 모델 사용
         else:
-            logger.info("🟢 등록 건 또는 일반 질문 → LLM (qwen-14b) 사용")
+            logger.info("🟢 등록 건 감지 → 베이스 모델 사용")
 
-            # 일반 LLM 프롬프트 구성
+            # 등록건 프롬프트 구성
             system_msg = (
                 "You are Qwen, a helpful patent analysis assistant.\n"
                 "규칙:\n"
                 "1) 반드시 한국어만 사용하고 중국어, 일본어 등 외국어(한자 포함)를 절대 사용하지 마십시오.\n"
                 "2) 출력은 한 단락의 한국어 공식 문장으로만 작성하십시오.\n"
-                "3) 본문에서 인용발명을 언급할 때는 반드시 '인용발명N(출원번호 XXXXX)' 형식으로 표기하십시오.\n"
+                "3) 유사 특허와 비교하여 등록 가능성이 있는 이유를 설명하십시오.\n"
             )
 
             user_msg = (
-                f"다음 유사 특허 정보를 바탕으로 사용자 질문에 답변해주세요.\n\n"
-                f"[사용자 질문]\n{request.query}\n\n"
-                f"[유사 특허 목록 (상위 {len(classified_patents)}개)]\n{similar_claims_text}\n"
-                f"[인용발명 라벨-출원번호 매핑]\n" + "\n".join(mappings) + "\n\n"
-                "주의: 본문에서 인용발명을 언급할 때는 반드시 '인용발명N(출원번호 XXXXX)' 형식으로 표기하고, "
-                "한국어만 사용하며 간결하게 작성하라."
+                f"다음 유사 특허 정보를 바탕으로 사용자의 청구항이 등록된 특허임을 분석해주세요.\n\n"
+                f"[사용자 청구항]\n{request.query}\n\n"
+                f"[유사 특허 목록 (상위 {len(classified_patents)}개)]\n{similar_claims_text}\n\n"
+                "위 유사 특허들과 비교했을 때, 제출된 청구항은 등록된 특허입니다. "
+                "유사 특허와의 차별점을 간단히 설명하고, 등록 가능한 이유를 한국어로 한 단락으로 작성해주세요."
             )
 
             prompt = f"<|im_start|>system\n{system_msg}<|im_end|>\n<|im_start|>user\n{user_msg}<|im_end|>\n<|im_start|>assistant"
 
-            if LLM_AVAILABLE:
-                llm_response = generate_response(
+            if BASE_MODEL_AVAILABLE:
+                base_response = generate_response(
                     LLMRequest(
                         prompt=prompt,
                         max_length=request.max_length
@@ -459,22 +449,24 @@ def rag_pipeline(request: RAGPipelineRequest):
                     "query": request.query,
                     "patents_used": len(classified_patents),
                     "classified": request.use_classification and CLASSIFICATION_AVAILABLE,
-                    "classification": "registration" if is_rejection == False else "unknown",
-                    "model_used": "LLM (qwen-14b)",
-                    "response": llm_response['response'],
+                    "classification": "registration",
+                    "model_used": "Base Model (Qwen2.5-14B)",
+                    "response": base_response['response'],
                     "metadata": {
-                        "prompt_length": llm_response['prompt_length'],
-                        "generated_length": llm_response['generated_length']
+                        "prompt_length": base_response['prompt_length'],
+                        "generated_length": base_response['generated_length']
                     }
                 }
             else:
-                # LLM 사용 불가 시 검색 결과만 반환
+                # 베이스 모델 사용 불가 시 단순 메시지 반환
                 return {
                     "query": request.query,
                     "patents_used": len(classified_patents),
                     "classified": request.use_classification and CLASSIFICATION_AVAILABLE,
-                    "response": f"관련 특허 {len(classified_patents)}개를 찾았습니다:\n\n{similar_claims_text}",
-                    "metadata": {"llm_available": False}
+                    "classification": "registration",
+                    "model_used": "None",
+                    "response": f"제출하신 청구항은 등록된 특허로 분류되었습니다. 관련 유사 특허 {len(classified_patents)}개를 찾았습니다.",
+                    "metadata": {"base_model_available": False}
                 }
 
     except Exception as e:
@@ -492,7 +484,7 @@ def health_check():
         "models": {
             "embedding": True,
             "classification": CLASSIFICATION_AVAILABLE,
-            "llm": LLM_AVAILABLE,
+            "base_model": BASE_MODEL_AVAILABLE,
             "sllm": SLLM_AVAILABLE
         }
     }
