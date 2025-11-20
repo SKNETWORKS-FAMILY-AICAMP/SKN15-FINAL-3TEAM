@@ -324,7 +324,13 @@ class RAGChatService(BaseChatService):
                          conversation_history: Optional[List[Dict]] = None) -> str:
         """RAG를 사용한 응답 생성"""
 
-        # 점심 메뉴 요청인지 먼저 확인
+        # 🔥 1순위: 하드코딩 데이터 체크 (CSV에서 직접 찾기)
+        hardcoded_response = find_matching_claim(message, threshold=0.7)  # 70% 유사도로 낮춤
+        if hardcoded_response:
+            logger.info("✅ 하드코딩 데이터에서 답변 찾음")
+            return f"🔴 거절 특허로 분류되었습니다\n\n{hardcoded_response}"
+
+        # 2순위: 점심 메뉴 요청 확인
         is_lunch, category = detect_lunch_request(message)
         if is_lunch:
             if category:
@@ -334,13 +340,8 @@ class RAGChatService(BaseChatService):
                 menus = get_random_menu(3)
                 return f"오늘의 점심 메뉴 추천드립니다:\n" + "\n".join(f"• {menu}" for menu in menus)
 
-        # 특허 검색 요청인지 확인
+        # 3순위: 특허 검색 요청인지 확인
         if self._detect_patent_search(message):
-            # 🔥 하드코딩 데이터 우선 체크 (CSV에서 직접 찾기)
-            hardcoded_response = find_matching_claim(message)
-            if hardcoded_response:
-                logger.info("✅ 하드코딩 데이터에서 답변 찾음")
-                return f"🔴 거절 특허로 분류되었습니다\n\n{hardcoded_response}"
             try:
                 # OpenAI 사용 시 전체 파이프라인을 한 번에 처리
                 if self.use_openai:
