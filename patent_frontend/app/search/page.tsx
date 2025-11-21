@@ -1545,6 +1545,13 @@ export default function SearchPage() {
                 </button>
               </div>
             </div>
+
+            {/* Disclaimer */}
+            <div className="px-4 py-2 border-t border-gray-200 bg-gray-50">
+              <p className="text-xs text-gray-500 text-center">
+                본 서비스는 실수를 할 수 있습니다. 중요한 정보는 재차 확인하세요.
+              </p>
+            </div>
           </div>
         </div>
       </div>
